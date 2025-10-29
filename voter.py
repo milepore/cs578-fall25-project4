@@ -238,6 +238,105 @@ class Voter:
         message_bytes = message.encode()
         signature = f"signed_{message_bytes.hex()}_with_{self.public_key}"
         return signature
+    
+    def perform_partial_decryption(self, encrypted_tally: str) -> dict:
+        """
+        Perform partial decryption of the encrypted tally using this voter's key share.
+        
+        In a real implementation, this would:
+        1. Use the voter's secret key share to partially decrypt the tally
+        2. For ElGamal: compute g^(a*r) where a is the share and r is from ciphertext
+        3. For threshold schemes: apply the share to the ciphertext component
+        4. Create a proof of correct partial decryption
+        
+        Args:
+            encrypted_tally: The encrypted tally to partially decrypt
+            
+        Returns:
+            dict: Contains 'x', 'y' (share coordinates) and 'proof' of correct decryption
+            
+        Raises:
+            ValueError: If voter doesn't have a key share
+        """
+        if not self.has_key_share():
+            raise ValueError(f"Voter {self.voter_id} has no key share for decryption")
+        
+        print(f"Voter {self.voter_id}: Performing partial decryption of tally")
+        
+        # Get this voter's Shamir share
+        if self.key_share is None:
+            raise ValueError(f"Voter {self.voter_id} key share is None")
+        share_x, share_y = self.key_share
+        
+        # In a real threshold cryptosystem, this would involve:
+        # - Applying the secret share to decrypt part of the ciphertext
+        # - Computing partial decryption: D_i = C^(s_i) where s_i is the share
+        # - Creating a proof of correct partial decryption
+        
+        # For our stub implementation, we'll use the share directly
+        # In practice, the share would be used in the decryption algorithm
+        
+        # Create partial decryption result
+        partial_result = {
+            'voter_id': self.voter_id,
+            'x': share_x,  # X coordinate of the share
+            'y': share_y,  # Y coordinate of the share (used in reconstruction)
+            'tally_hash': self._hash_tally(encrypted_tally),
+            'decryption_proof': self._create_partial_decryption_proof(encrypted_tally, share_x, share_y)
+        }
+        
+        print(f"Voter {self.voter_id}: Partial decryption completed")
+        print(f"  Share coordinates: ({share_x}, {str(share_y)[:10]}...)")
+        
+        return partial_result
+    
+    def _hash_tally(self, encrypted_tally: str) -> str:
+        """
+        Create a hash of the encrypted tally for verification.
+        
+        Args:
+            encrypted_tally: The encrypted tally
+            
+        Returns:
+            str: Hash of the tally
+        """
+        import hashlib
+        return hashlib.sha256(encrypted_tally.encode()).hexdigest()[:16]
+    
+    def _create_partial_decryption_proof(self, encrypted_tally: str, share_x: int, share_y: int) -> str:
+        """
+        Create a proof of correct partial decryption (stub implementation).
+        
+        In a real implementation, this would create a zero-knowledge proof that:
+        1. The partial decryption was computed correctly using the voter's share
+        2. The voter knows their secret share without revealing it
+        3. The partial decryption corresponds to the given encrypted tally
+        
+        This could use techniques like:
+        - Schnorr proofs for discrete log relations
+        - Chaum-Pedersen proofs for equality of discrete logs
+        - Custom protocols for threshold decryption verification
+        
+        Args:
+            encrypted_tally: The encrypted tally being decrypted
+            share_x: X coordinate of the secret share
+            share_y: Y coordinate of the secret share
+            
+        Returns:
+            str: Proof of correct partial decryption
+        """
+        import hashlib
+        import secrets
+        
+        # Create proof components
+        challenge_input = f"{encrypted_tally}|{share_x}|{self.voter_id}|partial_decrypt"
+        challenge = hashlib.sha256(challenge_input.encode()).hexdigest()[:16]
+        
+        response = secrets.token_hex(32)  # In real implementation, computed from share
+        
+        proof = f"partial_decrypt_proof|voter:{self.voter_id}|challenge:{challenge}|response:{response}"
+        
+        return proof
 
     def __repr__(self):
         return f"Voter(voter_id={self.voter_id}, decision_server={self.decision_server})"

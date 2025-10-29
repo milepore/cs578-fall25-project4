@@ -65,9 +65,63 @@ def main():
         print(f"Total votes cast: {server.get_vote_count()}")
         print(f"Quorum met: {'Yes' if server.has_quorum() else 'No'}")
         
+        # Perform homomorphic tallying if quorum is met
+        if server.has_quorum():
+            print(f"\nPerforming homomorphic tally...")
+            try:
+                encrypted_tally = server.tally_vote()
+                print(f"✓ Homomorphic tally completed successfully")
+                print(f"Encrypted total: {encrypted_tally[:50]}...")
+                
+                # Get complete results with verification proof
+                print(f"\nRetrieving tallied results with verification proof...")
+                results = server.get_tallied_results()
+                
+                print(f"✓ Results retrieved successfully:")
+                print(f"  - Total ciphertext: {results['total_ciphertext'][:40]}...")
+                print(f"  - Verification proof: {results['verification_proof'][:60]}...")
+                print(f"  - Number of votes: {results['num_votes']}")
+                print(f"  - Quorum requirement: {results['quorum']}")
+                print(f"  - Timestamp: {results['timestamp']}")
+                print(f"  - Voter IDs: {results['voter_ids']}")
+                
+                # Verify the tally proof
+                print(f"\nVerifying tally proof...")
+                is_valid = server.verify_tally_proof(results)
+                print(f"✓ Proof verification: {'PASSED' if is_valid else 'FAILED'}")
+                
+                # Perform decryption using threshold secret sharing
+                print(f"\nDecrypting results using threshold secret sharing...")
+                try:
+                    # Use first 'quorum' voters for decryption (could be any quorum-sized subset)
+                    decryption_voters = list(range(server.quorum))  # Use voter IDs 0, 1, 2 (first 3)
+                    
+                    print(f"Using voters {decryption_voters} for decryption (quorum = {server.quorum})")
+                    
+                    # Decrypt the results
+                    plaintext_total = server.decrypt_results(decryption_voters, voters)
+                    
+                    print(f"✓ Decryption successful!")
+                    print(f"Final vote total (plaintext): {plaintext_total}")
+                    
+                    # Show what the expected result should be based on votes cast
+                    expected_total = sum(votes_to_cast[:len(voters)])
+                    print(f"Expected total based on votes cast: {expected_total}")
+                    print(f"Decryption matches expectation: {'Yes' if plaintext_total == expected_total else 'No'}")
+                    
+                except Exception as e:
+                    print(f"✗ Decryption failed: {e}")
+                
+            except Exception as e:
+                print(f"✗ Tally failed: {e}")
+        else:
+            print(f"\nCannot perform tally - quorum not met")
+            print(f"Need {server.quorum - server.get_vote_count()} more votes")
+        
         print(f"\nSimulation complete!")
         print(f"Server has {server.number_voters} voters with quorum of {server.quorum}")
         print(f"Secret key length: {len(secret_key)} bytes")
+        print(f"Can tally: {'Yes' if server.can_tally() else 'No'}")
         
     except (ValueError, TypeError) as e:
         print(f"Error creating simulation: {e}")

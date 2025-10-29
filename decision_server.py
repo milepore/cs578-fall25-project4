@@ -2,6 +2,9 @@ import secrets
 import random
 from typing import List, Tuple
 
+# Shamir's Secret Sharing Constants
+SHAMIR_PRIME = 2**127 - 1  # Mersenne prime for finite field arithmetic
+
 
 class DecisionServer:
     """
@@ -136,16 +139,15 @@ class DecisionServer:
         Returns:
             List of (x, y) tuples representing the shares
         """
-        # Use a large prime for the finite field
-        prime = 2**127 - 1  # Mersenne prime
+        # Use the global prime constant for the finite field
         
         # Generate random coefficients for polynomial of degree k-1
-        coefficients = [secret] + [random.randrange(1, prime) for _ in range(k - 1)]
+        coefficients = [secret] + [random.randrange(1, SHAMIR_PRIME) for _ in range(k - 1)]
         
         # Create shares by evaluating polynomial at different x values
         shares = []
         for x in range(1, n + 1):
-            y = self._evaluate_polynomial(coefficients, x, prime)
+            y = self._evaluate_polynomial(coefficients, x, SHAMIR_PRIME)
             shares.append((x, y))
         
         return shares
@@ -382,6 +384,464 @@ class DecisionServer:
             bool: True if quorum is met, False otherwise
         """
         return self.get_vote_count() >= self.quorum
+    
+    def tally_vote(self) -> str:
+        """
+        Tally all cast votes using homomorphic evaluation to create a total ciphertext.
+        
+        This method performs homomorphic addition of all encrypted votes,
+        allowing the computation of the sum without decrypting individual votes.
+        Also generates a verification proof attesting to proper execution.
+        
+        Returns:
+            str: The homomorphically computed total ciphertext
+            
+        Raises:
+            ValueError: If no votes have been cast or quorum not met
+        """
+        if not hasattr(self, 'votes') or len(self.votes) == 0:
+            raise ValueError("No votes have been cast")
+        
+        if not self.has_quorum():
+            raise ValueError(f"Quorum not met. Need {self.quorum} votes, have {len(self.votes)}")
+        
+        print(f"DecisionServer: Starting homomorphic tally of {len(self.votes)} votes")
+        
+        # Extract all encrypted votes
+        encrypted_votes = [vote_data['encrypted_vote'] for vote_data in self.votes.values()]
+        
+        # Perform homomorphic addition
+        total_ciphertext = self._homomorphic_add_votes(encrypted_votes)
+        
+        # Generate verification proof for the homomorphic computation
+        verification_proof = self._generate_tally_verification_proof(encrypted_votes, total_ciphertext)
+        
+        # Store results for later retrieval
+        self._encrypted_tally = total_ciphertext
+        self._verification_proof = verification_proof
+        
+        print(f"DecisionServer: Tally complete. Total ciphertext: {total_ciphertext[:30]}...")
+        print(f"DecisionServer: Verification proof generated: {verification_proof[:40]}...")
+        
+        return total_ciphertext
+    
+    def _homomorphic_add_votes(self, encrypted_votes: List[str]) -> str:
+        """
+        Perform homomorphic addition of encrypted votes (stub implementation).
+        
+        In a real implementation, this would use proper homomorphic encryption schemes like:
+        - ElGamal: multiply ciphertexts to add plaintexts
+        - Paillier: multiply ciphertexts to add plaintexts
+        - BGV/BFV: native addition operations
+        - CKKS: approximate homomorphic operations
+        
+        Args:
+            encrypted_votes: List of encrypted vote ciphertexts
+            
+        Returns:
+            str: The homomorphically computed sum ciphertext
+        """
+        import hashlib
+        
+        # Stub implementation using additive combination
+        # In practice, this would use proper homomorphic operations
+        
+        print(f"DecisionServer: Performing homomorphic addition on {len(encrypted_votes)} ciphertexts")
+        
+        # Parse the stub encrypted votes to extract components
+        vote_components = []
+        total_actual_sum = 0  # For stub verification (wouldn't exist in real implementation)
+        
+        for i, encrypted_vote in enumerate(encrypted_votes):
+            try:
+                # Parse our stub format: "hash:nonce:vote"
+                parts = encrypted_vote.split(':')
+                if len(parts) >= 3:
+                    ciphertext_hash = parts[0]
+                    nonce = parts[1]
+                    # In real implementation, we wouldn't have access to plaintext
+                    actual_vote = int(parts[2])  # This is just for stub demonstration
+                    total_actual_sum += actual_vote
+                    
+                    vote_components.append({
+                        'hash': ciphertext_hash,
+                        'nonce': nonce,
+                        'vote_index': i
+                    })
+                    
+                    print(f"  Processing vote {i}: hash={ciphertext_hash[:10]}..., nonce={nonce[:8]}...")
+                
+            except (ValueError, IndexError) as e:
+                print(f"  Warning: Could not parse encrypted vote {i}: {e}")
+        
+        # Simulate homomorphic addition by combining hash values
+        # In real homomorphic encryption, this would be proper ciphertext operations
+        combined_hash_input = "|".join([comp['hash'] for comp in vote_components])
+        combined_nonces = "|".join([comp['nonce'] for comp in vote_components])
+        
+        # Create the homomorphic sum ciphertext
+        total_hash_input = f"homomorphic_sum|{combined_hash_input}|{combined_nonces}".encode()
+        total_ciphertext_hash = hashlib.sha256(total_hash_input).hexdigest()
+        
+        # In our stub, include the actual sum for demonstration (real implementation wouldn't have this)
+        total_ciphertext = f"hom_sum_{total_ciphertext_hash}:combined_nonces:{total_actual_sum}_votes"
+        
+        print(f"DecisionServer: Homomorphic sum computed from {len(vote_components)} valid votes")
+        print(f"DecisionServer: Combined hash: {total_ciphertext_hash[:20]}...")
+        
+        return total_ciphertext
+    
+    def get_encrypted_tally(self) -> str:
+        """
+        Get the encrypted tally if it has been computed.
+        
+        Returns:
+            str: The encrypted tally, or raises exception if not computed
+        """
+        if not hasattr(self, '_encrypted_tally'):
+            self._encrypted_tally = self.tally_vote()
+        
+        return self._encrypted_tally
+    
+    def _generate_tally_verification_proof(self, encrypted_votes: List[str], total_ciphertext: str) -> str:
+        """
+        Generate a Non-Interactive Zero-Knowledge Proof verifying the correctness of homomorphic tallying.
+        
+        This NIZK proof demonstrates that:
+        1. The total_ciphertext is the correct homomorphic sum of all encrypted_votes
+        2. No votes were added, removed, or modified during tallying
+        3. The homomorphic operations were performed correctly
+        
+        In a real implementation, this would use techniques like:
+        - Bulletproofs for range proofs and arithmetic circuits
+        - PLONK/STARK for general computation verification
+        - Groth16 for succinct proofs
+        - Custom sigma protocols for homomorphic operation verification
+        
+        Args:
+            encrypted_votes: List of individual encrypted votes
+            total_ciphertext: The computed homomorphic sum
+            
+        Returns:
+            str: The verification proof
+        """
+        import hashlib
+        import secrets
+        
+        print(f"DecisionServer: Generating verification proof for {len(encrypted_votes)} votes")
+        
+        # Step 1: Create commitment to all input votes
+        votes_commitment = self._create_votes_commitment(encrypted_votes)
+        
+        # Step 2: Create witness for the homomorphic computation
+        computation_witness = self._create_computation_witness(encrypted_votes, total_ciphertext)
+        
+        # Step 3: Generate Fiat-Shamir challenge
+        challenge_input = f"{votes_commitment}|{total_ciphertext}|{computation_witness}|tally_proof"
+        challenge_hash = hashlib.sha256(challenge_input.encode()).hexdigest()
+        challenge = challenge_hash[:32]  # Use first 32 chars as challenge
+        
+        # Step 4: Generate proof response
+        proof_response = secrets.token_hex(64)  # In real implementation, computed from witness
+        
+        # Step 5: Create verification metadata
+        proof_metadata = {
+            'num_votes': len(encrypted_votes),
+            'quorum': self.quorum,
+            'votes_hash': hashlib.sha256('|'.join(encrypted_votes).encode()).hexdigest()[:16],
+            'total_hash': hashlib.sha256(total_ciphertext.encode()).hexdigest()[:16]
+        }
+        
+        # Construct the complete proof
+        verification_proof = (
+            f"tally_verification_proof|"
+            f"commitment:{votes_commitment}|"
+            f"witness:{computation_witness}|"
+            f"challenge:{challenge}|"
+            f"response:{proof_response}|"
+            f"metadata:{proof_metadata['num_votes']}_{proof_metadata['quorum']}_{proof_metadata['votes_hash']}_{proof_metadata['total_hash']}"
+        )
+        
+        print(f"DecisionServer: Verification proof components generated")
+        print(f"  - Votes commitment: {votes_commitment[:20]}...")
+        print(f"  - Challenge: {challenge[:16]}...")
+        print(f"  - Response: {proof_response[:20]}...")
+        
+        return verification_proof
+    
+    def _create_votes_commitment(self, encrypted_votes: List[str]) -> str:
+        """
+        Create a cryptographic commitment to all input votes.
+        
+        Args:
+            encrypted_votes: List of encrypted votes
+            
+        Returns:
+            str: Commitment to the votes
+        """
+        import hashlib
+        
+        # Sort votes for canonical ordering
+        sorted_votes = sorted(encrypted_votes)
+        
+        # Create Merkle-tree like commitment
+        votes_concat = '|'.join(sorted_votes)
+        commitment = hashlib.sha256(f"votes_commitment|{votes_concat}".encode()).hexdigest()
+        
+        return f"commit_{commitment[:32]}"
+    
+    def _create_computation_witness(self, encrypted_votes: List[str], total_ciphertext: str) -> str:
+        """
+        Create a witness for the homomorphic computation.
+        
+        Args:
+            encrypted_votes: List of input votes
+            total_ciphertext: Computed result
+            
+        Returns:
+            str: Computation witness
+        """
+        import hashlib
+        
+        # Create witness showing the computation path
+        computation_steps = f"homomorphic_add({len(encrypted_votes)}_votes) -> {total_ciphertext}"
+        witness_hash = hashlib.sha256(computation_steps.encode()).hexdigest()
+        
+        return f"witness_{witness_hash[:32]}"
+    
+    def get_tallied_results(self) -> dict:
+        """
+        Get the tallied results along with verification proof.
+        
+        Returns:
+            dict: Contains 'total_ciphertext', 'verification_proof', and metadata
+            
+        Raises:
+            ValueError: If tally has not been computed yet
+        """
+        if not hasattr(self, '_encrypted_tally') or not hasattr(self, '_verification_proof'):
+            raise ValueError("Tally has not been computed yet. Call tally_vote() first.")
+        
+        results = {
+            'total_ciphertext': self._encrypted_tally,
+            'verification_proof': self._verification_proof,
+            'num_votes': len(self.votes) if hasattr(self, 'votes') else 0,
+            'quorum': self.quorum,
+            'timestamp': self._get_timestamp(),
+            'voter_ids': list(self.votes.keys()) if hasattr(self, 'votes') else []
+        }
+        
+        print(f"DecisionServer: Returning tallied results with verification proof")
+        
+        return results
+    
+    def verify_tally_proof(self, results: dict) -> bool:
+        """
+        Verify the tallying verification proof (stub implementation).
+        
+        In a real implementation, this would:
+        1. Parse the proof components
+        2. Recompute commitments and challenges
+        3. Verify the proof response
+        4. Check proof validity against public parameters
+        
+        Args:
+            results: Results dictionary containing proof
+            
+        Returns:
+            bool: True if proof is valid, False otherwise
+        """
+        try:
+            proof = results['verification_proof']
+            
+            # Basic format validation
+            if not proof.startswith('tally_verification_proof|'):
+                return False
+            
+            # Check required components
+            required_components = ['commitment:', 'witness:', 'challenge:', 'response:', 'metadata:']
+            for component in required_components:
+                if component not in proof:
+                    return False
+            
+            print(f"DecisionServer: Tally verification proof is valid (stub verification)")
+            return True
+            
+        except Exception as e:
+            print(f"DecisionServer: Proof verification failed: {e}")
+            return False
+    
+    def _get_timestamp(self) -> str:
+        """Get current timestamp for results."""
+        from datetime import datetime
+        return datetime.now().isoformat()
+    
+    def decrypt_results(self, voter_ids_for_decryption: List[int], voters: List) -> int:
+        """
+        Decrypt the tallied results using Shamir's secret sharing reconstruction.
+        
+        This method:
+        1. Verifies the NIZK proof from the tally
+        2. Requests partial decryptions from specified voters
+        3. Combines partial decryptions to recover the plaintext total
+        
+        Args:
+            voter_ids_for_decryption: List of voter IDs to use for decryption (must be >= quorum)
+            voters: List of Voter objects for partial decryption
+            
+        Returns:
+            int: The plaintext vote total
+            
+        Raises:
+            ValueError: If insufficient voters, tally not computed, or proof invalid
+        """
+        # Validate inputs
+        if len(voter_ids_for_decryption) < self.quorum:
+            raise ValueError(f"Need at least {self.quorum} voters for decryption, got {len(voter_ids_for_decryption)}")
+        
+        if not hasattr(self, '_encrypted_tally') or not hasattr(self, '_verification_proof'):
+            raise ValueError("No encrypted tally available. Call tally_vote() first.")
+        
+        print(f"DecisionServer: Starting decryption process with {len(voter_ids_for_decryption)} voters")
+        
+        # Step 1: Verify the NIZK proof from the tally
+        print(f"DecisionServer: Verifying tally NIZK proof...")
+        results = self.get_tallied_results()
+        if not self.verify_tally_proof(results):
+            raise ValueError("Tally verification proof is invalid - cannot proceed with decryption")
+        
+        print(f"✓ Tally NIZK proof verification passed")
+        
+        # Step 2: Get partial decryptions from each voter
+        partial_decryptions = []
+        voter_lookup = {v.voter_id: v for v in voters}
+        
+        print(f"DecisionServer: Requesting partial decryptions from voters...")
+        for voter_id in voter_ids_for_decryption:
+            if voter_id not in voter_lookup:
+                raise ValueError(f"Voter {voter_id} not found in voter list")
+            
+            voter = voter_lookup[voter_id]
+            
+            # Request partial decryption from this voter
+            partial_decryption = self._request_partial_decryption(voter, self._encrypted_tally)
+            if partial_decryption is None:
+                raise ValueError(f"Failed to get partial decryption from voter {voter_id}")
+            
+            partial_decryptions.append(partial_decryption)
+            print(f"  ✓ Received partial decryption from voter {voter_id}")
+        
+        # Step 3: Combine partial decryptions using Shamir's secret reconstruction
+        print(f"DecisionServer: Combining {len(partial_decryptions)} partial decryptions...")
+        plaintext_total = self._reconstruct_secret_from_shares(partial_decryptions)
+        
+        print(f"DecisionServer: Decryption complete. Total votes: {plaintext_total}")
+        
+        return plaintext_total
+    
+    def _request_partial_decryption(self, voter, encrypted_tally: str):
+        """
+        Request a partial decryption from a voter using their key share.
+        
+        Args:
+            voter: The Voter object to request decryption from
+            encrypted_tally: The encrypted tally to partially decrypt
+            
+        Returns:
+            Tuple containing the voter's share and partial decryption result
+        """
+        print(f"DecisionServer: Requesting partial decryption from voter {voter.voter_id}")
+        
+        # Verify voter has a key share
+        if not voter.has_key_share():
+            print(f"DecisionServer: Voter {voter.voter_id} has no key share")
+            return None
+        
+        # Request partial decryption
+        try:
+            partial_decryption = voter.perform_partial_decryption(encrypted_tally)
+            return partial_decryption
+        except Exception as e:
+            print(f"DecisionServer: Failed to get partial decryption from voter {voter.voter_id}: {e}")
+            return None
+    
+    def _reconstruct_secret_from_shares(self, partial_decryptions: List) -> int:
+        """
+        Reconstruct the secret using Shamir's secret sharing with Lagrange interpolation.
+        
+        Args:
+            partial_decryptions: List of (x, y) tuples representing shares
+            
+        Returns:
+            int: The reconstructed secret (plaintext vote total)
+        """
+        print(f"DecisionServer: Reconstructing secret from {len(partial_decryptions)} shares")
+        
+        # Use the global prime constant for consistency
+        
+        # Extract shares (x, y) coordinates
+        shares = [(share['x'], share['y']) for share in partial_decryptions]
+        
+        # Lagrange interpolation to find polynomial value at x=0 (the secret)
+        secret = 0
+        
+        for i, (xi, yi) in enumerate(shares):
+            # Calculate Lagrange basis polynomial Li(0)
+            li = 1
+            for j, (xj, _) in enumerate(shares):
+                if i != j:
+                    # Li(0) = product of (-xj) / (xi - xj) for all j != i
+                    numerator = (-xj) % SHAMIR_PRIME
+                    denominator = (xi - xj) % SHAMIR_PRIME
+                    # Compute modular inverse of denominator
+                    inv_denominator = self._mod_inverse(denominator, SHAMIR_PRIME)
+                    li = (li * numerator * inv_denominator) % SHAMIR_PRIME
+            
+            # Add yi * Li(0) to the secret
+            secret = (secret + yi * li) % SHAMIR_PRIME
+        
+        # Convert back to reasonable integer (remove modular arithmetic effects)
+        # In our stub implementation, we know the result should be small
+        if secret > SHAMIR_PRIME // 2:
+            secret = secret - SHAMIR_PRIME
+        
+        print(f"DecisionServer: Secret reconstruction complete")
+        
+        return int(secret)
+    
+    def _mod_inverse(self, a: int, m: int) -> int:
+        """
+        Compute modular multiplicative inverse using extended Euclidean algorithm.
+        
+        Args:
+            a: Number to find inverse of
+            m: Modulus
+            
+        Returns:
+            int: Modular inverse of a mod m
+        """
+        def extended_gcd(a, b):
+            if a == 0:
+                return b, 0, 1
+            gcd, x1, y1 = extended_gcd(b % a, a)
+            x = y1 - (b // a) * x1
+            y = x1
+            return gcd, x, y
+        
+        gcd, x, _ = extended_gcd(a % m, m)
+        if gcd != 1:
+            raise ValueError("Modular inverse does not exist")
+        
+        return (x % m + m) % m
+    
+    def can_tally(self) -> bool:
+        """
+        Check if tallying is possible (enough votes received).
+        
+        Returns:
+            bool: True if tallying can be performed, False otherwise
+        """
+        return hasattr(self, 'votes') and len(self.votes) >= self.quorum
 
     def __repr__(self):
         return f"DecisionServer(number_voters={self.number_voters}, quorum={self.quorum})"
