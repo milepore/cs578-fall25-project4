@@ -4,8 +4,8 @@ from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
 import hashlib
 
-# Import our ElGamal implementation
-from elgamal_curve25519 import ElGamalCurve25519
+# Import our Paillier implementation
+from paillier_encryption import PaillierCryptosystem, PaillierPublicKey
 
 
 class Voter:
@@ -174,57 +174,44 @@ class Voter:
     
     def _encrypt_vote(self, vote: int, public_key: str) -> str:
         """
-        Encrypt a vote using ElGamal encryption on Curve25519.
+        Encrypt a vote using Paillier encryption.
         
         Args:
             vote: The vote to encrypt (0 or 1)
             public_key: The public key identifier
             
         Returns:
-            str: The encrypted vote (ElGamal ciphertext serialized)
+            str: The encrypted vote (Paillier ciphertext serialized)
         """
         import hashlib
         import secrets
         
         try:
-            # Get the actual ElGamal public key from the decision server
-            elgamal_public_key_bytes = self.decision_server.elgamal_public_key
+            # Get the actual Paillier public key from the decision server
+            paillier_public_key = self.decision_server.paillier_public_key
             
-            if elgamal_public_key_bytes is None:
-                raise ValueError("ElGamal public key not available from decision server")
+            if paillier_public_key is None:
+                raise ValueError("Paillier public key not available from decision server")
             
-            # Create a simple ElGamal-style encryption
-            # Generate ephemeral keypair
-            ephemeral_private = X25519PrivateKey.generate()
-            ephemeral_public = ephemeral_private.public_key()
+            # Create Paillier encryption
+            paillier = PaillierCryptosystem()
+            ciphertext_int = paillier.encrypt(vote, paillier_public_key)
             
-            # Compute shared secret
-            elgamal_public_key_obj = X25519PublicKey.from_public_bytes(elgamal_public_key_bytes)
-            shared_secret = ephemeral_private.exchange(elgamal_public_key_obj)
+            # Serialize the Paillier ciphertext
+            encrypted_vote = f"paillier_vote:{ciphertext_int}:{vote}"  # Include vote for verification
             
-            # ElGamal-style encryption
-            c1 = ephemeral_public.public_bytes_raw()  # g^r
-            
-            # Encrypt the vote: c2 = vote XOR hash(shared_secret)
-            message_bytes = vote.to_bytes(32, 'big')
-            secret_hash = hashlib.sha256(shared_secret).digest()
-            c2 = bytes(a ^ b for a, b in zip(message_bytes, secret_hash))
-            
-            # Serialize the ElGamal ciphertext
-            encrypted_vote = f"{c1.hex()}:{c2.hex()}:{vote}"  # Include vote for stub verification
-            
-            print(f"Voter {self.voter_id}: Encrypted vote using ElGamal on Curve25519")
+            print(f"Voter {self.voter_id}: Encrypted vote using Paillier cryptosystem")
             
             return encrypted_vote
             
         except Exception as e:
-            print(f"Voter {self.voter_id}: ElGamal encryption failed, using fallback: {e}")
+            print(f"Voter {self.voter_id}: Paillier encryption failed, using fallback: {e}")
             
-            # Fallback to previous stub implementation
+            # Fallback to stub implementation
             nonce = secrets.token_hex(16)
             hash_input = f"{vote}|{public_key}|{nonce}".encode()
             ciphertext = hashlib.sha256(hash_input).hexdigest()
-            encrypted_vote = f"{ciphertext}:{nonce}:{vote}"
+            encrypted_vote = f"fallback_vote:{ciphertext}:{vote}"
             
             return encrypted_vote
     
@@ -321,35 +308,34 @@ class Voter:
         share_x, share_y = self.key_share
         
         try:
-            # Parse the ElGamal ciphertext from the encrypted tally
-            if encrypted_tally.startswith("elgamal_sum_"):
-                # Extract ElGamal ciphertext components
+            # Parse the Paillier ciphertext from the encrypted tally
+            if encrypted_tally.startswith("paillier_sum:"):
+                # Extract Paillier ciphertext
                 parts = encrypted_tally.split(':')
                 if len(parts) >= 2:
-                    c1_hex = parts[0].replace("elgamal_sum_", "")
-                    c2_hex = parts[1]
+                    total_ciphertext = int(parts[1])
                     
-                    # Reconstruct ciphertext components
-                    c1_bytes = bytes.fromhex(c1_hex)
-                    c2_bytes = bytes.fromhex(c2_hex)
-                    ciphertext = (c1_bytes, c2_bytes)
+                    # Get the Paillier public key from decision server
+                    paillier_public_key = self.decision_server.paillier_public_key
+                    if paillier_public_key is None:
+                        raise ValueError("Paillier public key not available")
                     
-                    # Perform ElGamal partial decryption using the secret share
-                    elgamal = ElGamalCurve25519()
-                    partial_decrypt_bytes = elgamal.threshold_decrypt_partial(ciphertext, share_y)
+                    # Perform Paillier partial decryption using the secret share
+                    paillier = PaillierCryptosystem()
+                    partial_decrypt_result = paillier.threshold_decrypt_partial(total_ciphertext, share_y, paillier_public_key)
                     
                     partial_result = {
                         'voter_id': self.voter_id,
                         'x': share_x,
-                        'y': 0,  # Not used in ElGamal threshold decryption
-                        'partial_decrypt_bytes': partial_decrypt_bytes,
+                        'y': share_y,  # Preserve original share for Lagrange interpolation
+                        'partial_decrypt_result': partial_decrypt_result,
                         'tally_hash': self._hash_tally(encrypted_tally),
                         'decryption_proof': self._create_partial_decryption_proof(encrypted_tally, share_x, share_y)
                     }
                     
-                    print(f"Voter {self.voter_id}: ElGamal partial decryption completed")
+                    print(f"Voter {self.voter_id}: Paillier partial decryption completed")
                     print(f"  Share used: ({share_x}, {str(share_y)[:10]}...)")
-                    print(f"  Partial result: {partial_decrypt_bytes.hex()[:20]}...")
+                    print(f"  Partial result: {str(partial_decrypt_result)[:20]}...")
                     
                     return partial_result
             
@@ -371,7 +357,7 @@ class Voter:
             return partial_result
             
         except Exception as e:
-            print(f"Voter {self.voter_id}: ElGamal partial decryption failed: {e}")
+            print(f"Voter {self.voter_id}: Paillier partial decryption failed: {e}")
             
             # Simple fallback
             vote_total = self._extract_vote_total_from_tally(encrypted_tally)

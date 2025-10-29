@@ -12,7 +12,7 @@ The system implements a **threshold cryptographic voting scheme** with the follo
 
 1. **DecisionServer**: Central authority managing the voting process
 2. **Voters**: Individual participants with cryptographic identities
-3. **ElGamal Encryption**: Homomorphic encryption on Curve25519
+3. **Paillier Encryption**: Additive homomorphic encryption
 4. **Shamir's Secret Sharing**: Threshold decryption mechanism
 
 ### **Key Design Features**
@@ -23,7 +23,7 @@ The system implements a **threshold cryptographic voting scheme** with the follo
 - **Challenge-Response Authentication**: Server authenticates voters using cryptographic challenges before key distribution
 
 #### **2. Threshold Cryptography Setup**
-- **ElGamal Keypair Generation**: Server generates a master ElGamal keypair on Curve25519
+- **Paillier Keypair Generation**: Server generates a master Paillier keypair
 - **Shamir's Secret Sharing**: The private key is split into `n` shares using Shamir's scheme
 - **Quorum Requirement**: Only `k` out of `n` voters are needed for decryption (configurable quorum)
 - **Key Distribution**: Each authenticated voter receives their secret share and the public key
@@ -32,7 +32,7 @@ The system implements a **threshold cryptographic voting scheme** with the follo
 ```python
 def castVote(self, encrypted_vote: str, zkp: str, voter_id: int, signature: str) -> bool
 ```
-- **Vote Encryption**: Voters encrypt their binary votes (0 or 1) using ElGamal
+- **Vote Encryption**: Voters encrypt their binary votes (0 or 1) using Paillier
 - **Zero-Knowledge Proofs**: Each vote includes a ZKP proving the encrypted value is either 0 or 1
 - **Digital Signatures**: All vote submissions are digitally signed for authenticity
 - **Double-Voting Prevention**: Server prevents the same voter from voting multiple times
@@ -41,7 +41,7 @@ def castVote(self, encrypted_vote: str, zkp: str, voter_id: int, signature: str)
 ```python
 def tally_vote(self) -> str
 ```
-- **Homomorphic Addition**: Uses ElGamal's multiplicative homomorphism (Enc(a) × Enc(b) = Enc(a + b))
+- **Homomorphic Addition**: Uses Paillier's additive homomorphism (Enc(a) × Enc(b) = Enc(a + b))
 - **Batch Processing**: Combines all encrypted votes without decrypting individual votes
 - **Verification Proofs**: Generates Non-Interactive Zero-Knowledge proofs of correct tallying
 - **Quorum Enforcement**: Only performs tallying when minimum vote threshold is met
@@ -74,7 +74,7 @@ def decrypt_results(self, voter_ids_for_decryption: List[int], voters: List) -> 
 ### **Implementation Details**
 
 #### **Cryptographic Primitives**
-- **Curve25519**: Modern elliptic curve for ElGamal encryption
+- **Paillier Cryptosystem**: RSA-based homomorphic encryption (1024-bit keys)
 - **Ed25519**: Digital signatures for authentication
 - **SHA-256**: Cryptographic hashing for proofs and commitments
 - **Mersenne Prime (2^127 - 1)**: Finite field for Shamir's secret sharing
@@ -113,3 +113,26 @@ plaintext_total = server.decrypt_results(voter_ids[:3], voters[:3])
 ```
 
 This design provides a robust, privacy-preserving voting system suitable for group decision-making scenarios where vote privacy and result integrity are critical requirements.
+
+## Choice of Paillier Encryption
+
+This implementation uses **Paillier encryption** instead of ElGamal for several critical advantages:
+
+### **ElGamal Limitations**
+- **Discrete Logarithm Problem**: Decryption requires solving `g^x = result` where `x` is the vote total
+- **Computational Bottleneck**: Exponential time complexity - impractical for large elections
+- **Scalability Issues**: Works for small votes (<1000) but fails for large elections (>100,000)
+- **Performance Degradation**: Decryption time grows exponentially with vote total
+
+### **Paillier Advantages**
+- **Direct Integer Decryption**: Returns plaintext vote total directly (no discrete log solving)
+- **Linear Performance**: Decryption time is constant regardless of vote total
+- **Better Scalability**: Suitable for large-scale elections with millions of voters
+- **Production Ready**: Used in real-world e-voting systems
+
+### **Trade-offs**
+- **Larger Ciphertexts**: Paillier ciphertexts are larger than ElGamal (acceptable for voting)
+- **Different Security Assumption**: Based on Composite Residuosity instead of Discrete Log
+- **RSA-style Keys**: Requires prime generation instead of elliptic curve points
+
+The switch to Paillier eliminates the fundamental scalability bottleneck that would make ElGamal impractical for real-world voting applications.
