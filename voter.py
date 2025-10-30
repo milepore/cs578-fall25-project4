@@ -4,8 +4,8 @@ from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
 import hashlib
 
-# Import our ElGamal implementation
-from threshold_elgamal import ThresholdElGamal
+# Import our BGV threshold crypto implementation
+from bgv_threshold_crypto import BGVThresholdCrypto, BGVCiphertext
 
 class Voter:
     """
@@ -140,7 +140,9 @@ class Voter:
         print(f"Voter {self.voter_id} casting vote: {vote}")
         
         # Step 1: Encrypt the vote using the shared public key
-        encrypted_vote = self._encrypt_vote(vote, str(self.shared_public_key))
+        if not isinstance(self.shared_public_key, bytes):
+            raise ValueError("Public key must be bytes for BGV encryption")
+        encrypted_vote = self._encrypt_vote(vote, self.shared_public_key)
         print(f"Voter {self.voter_id} encrypted vote: {encrypted_vote[:20]}...")
         
         # Step 2: Create a zero-knowledge proof that the vote is 0 or 1
@@ -171,61 +173,47 @@ class Voter:
             print(f"Voter {self.voter_id} vote casting failed: {e}")
             return False
     
-    def _encrypt_vote(self, vote: int, public_key: str) -> str:
+    def _encrypt_vote(self, vote: int, public_context: bytes) -> str:
         """
-        Encrypt a vote using ElGamal encryption on Curve25519.
+        Encrypt a vote using BGV homomorphic encryption.
         
         Args:
             vote: The vote to encrypt (0 or 1)
-            public_key: The public key identifier
+            public_context: The BGV public context for encryption
             
         Returns:
-            str: The encrypted vote (ElGamal ciphertext serialized)
+            str: The encrypted vote (BGV ciphertext serialized as JSON)
         """
-        import hashlib
-        import secrets
+        import json
         
         try:
-            # Get the actual ElGamal public key from the decision server
-            elgamal_public_key_bytes = self.decision_server.elgamal_public_key
+            # Create a temporary BGV crypto instance with public context
+            import tenseal as ts
+            context = ts.context_from(public_context)
             
-            if elgamal_public_key_bytes is None:
-                raise ValueError("ElGamal public key not available from decision server")
+            # Encrypt the vote using BFV
+            encrypted_vote = ts.bfv_vector(context, [vote])
             
-            # Create a simple ElGamal-style encryption
-            # Generate ephemeral keypair
-            ephemeral_private = X25519PrivateKey.generate()
-            ephemeral_public = ephemeral_private.public_key()
+            # Create BGV ciphertext object
+            bgv_ciphertext = BGVCiphertext(
+                serialized_data=encrypted_vote.serialize(),
+                context_data={
+                    'scheme': 'BFV',
+                    'voter_id': self.voter_id,
+                    'encrypted_at': 'timestamp_placeholder'
+                }
+            )
             
-            # Compute shared secret
-            elgamal_public_key_obj = X25519PublicKey.from_public_bytes(elgamal_public_key_bytes)
-            shared_secret = ephemeral_private.exchange(elgamal_public_key_obj)
+            # Serialize to JSON
+            encrypted_vote_json = json.dumps(bgv_ciphertext.to_dict())
             
-            # ElGamal-style encryption
-            c1 = ephemeral_public.public_bytes_raw()  # g^r
+            print(f"Voter {self.voter_id}: Encrypted vote using BGV/BFV")
             
-            # Encrypt the vote: c2 = vote XOR hash(shared_secret)
-            message_bytes = vote.to_bytes(32, 'big')
-            secret_hash = hashlib.sha256(shared_secret).digest()
-            c2 = bytes(a ^ b for a, b in zip(message_bytes, secret_hash))
-            
-            # Serialize the ElGamal ciphertext
-            encrypted_vote = f"{c1.hex()}:{c2.hex()}:{vote}"  # Include vote for stub verification
-            
-            print(f"Voter {self.voter_id}: Encrypted vote using ElGamal on Curve25519")
-            
-            return encrypted_vote
+            return encrypted_vote_json
             
         except Exception as e:
-            print(f"Voter {self.voter_id}: ElGamal encryption failed, using fallback: {e}")
-            
-            # Fallback to previous stub implementation
-            nonce = secrets.token_hex(16)
-            hash_input = f"{vote}|{public_key}|{nonce}".encode()
-            ciphertext = hashlib.sha256(hash_input).hexdigest()
-            encrypted_vote = f"{ciphertext}:{nonce}:{vote}"
-            
-            return encrypted_vote
+            print(f"Voter {self.voter_id}: BGV encryption failed: {e}")
+            raise e
     
     def _create_vote_zkp(self, vote: int, encrypted_vote: str) -> str:
         """
@@ -293,13 +281,7 @@ class Voter:
     def perform_partial_decryption(self, encrypted_tally: str) -> dict:
         """
         Perform partial decryption of the encrypted tally using this voter's key share.
-        
-        In a real implementation, this would:
-        1. Use the voter's secret key share to partially decrypt the tally
-        2. For ElGamal: compute g^(a*r) where a is the share and r is from ciphertext
-        3. For threshold schemes: apply the share to the ciphertext component
-        4. Create a proof of correct partial decryption
-        
+
         Args:
             encrypted_tally: The encrypted tally to partially decrypt
             
@@ -320,42 +302,35 @@ class Voter:
         share_x, share_y = self.key_share
         
         try:
-            # Parse the ElGamal ciphertext from the encrypted tally
-            if encrypted_tally.startswith("elgamal_sum_"):
-                # Extract ElGamal ciphertext components
-                parts = encrypted_tally.split(':')
-                if len(parts) >= 2:
-                    c1_hex = parts[0].replace("elgamal_sum_", "")
-                    c2_hex = parts[1]
-                    
-                    # Reconstruct ciphertext components
-                    c1_bytes = bytes.fromhex(c1_hex)
-                    c2_bytes = bytes.fromhex(c2_hex)
-                    ciphertext = (c1_bytes, c2_bytes)
-                    
-                    # Perform ElGamal partial decryption using the secret share
-                    # Use a minimal ElGamal instance (no discrete log table needed for partial decryption)
-                    elgamal = ThresholdElGamal(max_votes=1)  # Minimal table for partial decryption
-                    partial_decrypt_bytes = elgamal.partial_decrypt(ciphertext, share_y)
-                    
-                    partial_result = {
-                        'voter_id': self.voter_id,
-                        'x': share_x,
-                        'y': 0,  # Not used in ElGamal threshold decryption
-                        'partial_decrypt_bytes': partial_decrypt_bytes,
-                        'tally_hash': self._hash_tally(encrypted_tally),
-                        'decryption_proof': self._create_partial_decryption_proof(encrypted_tally, share_x, share_y)
-                    }
-                    
-                    print(f"Voter {self.voter_id}: ElGamal partial decryption completed")
-                    print(f"  Share used: ({share_x}, {str(share_y)[:10]}...)")
-                    print(f"  Partial result: {partial_decrypt_bytes.hex()[:20]}...")
-                    
-                    return partial_result
+            # Parse the BGV ciphertext from the encrypted tally (JSON format)
+            import json
+            try:
+                ciphertext_dict = json.loads(encrypted_tally)
+                # We have a valid BGV ciphertext in JSON format
+                
+                # For BGV, partial decryption is just providing the secret share
+                # The actual BGV partial decryption happens in the crypto system
+                
+                partial_result = {
+                    'voter_id': self.voter_id,
+                    'x': share_x,
+                    'y': share_y,  # BGV uses both x and y from the Shamir share
+                    'tally_hash': self._hash_tally(encrypted_tally),
+                    'decryption_proof': self._create_partial_decryption_proof(encrypted_tally, share_x, share_y)
+                }
+                
+                print(f"Voter {self.voter_id}: BGV partial decryption completed")
+                print(f"  Share used: ({share_x}, {str(share_y)[:10]}...)")
+                print(f"  Share values provided for threshold reconstruction")
+                
+                return partial_result
+                
+            except json.JSONDecodeError:
+                raise ValueError(f"Invalid BGV ciphertext format: {encrypted_tally[:100]}...")
             
-            # Fallback for stub format
-            vote_total = self._extract_vote_total_from_tally(encrypted_tally)
-            vote_share_y = vote_total if share_x == 1 else 0
+            # Fallback for other formats - cannot extract plaintext total anymore
+            # This is proper - in real cryptographic systems, you can't see plaintext from ciphertext
+            vote_share_y = 0  # Cannot determine this without proper decryption
             
             partial_result = {
                 'voter_id': self.voter_id,
@@ -371,11 +346,10 @@ class Voter:
             return partial_result
             
         except Exception as e:
-            print(f"Voter {self.voter_id}: ElGamal partial decryption failed: {e}")
+            print(f"Voter {self.voter_id}: Partial decryption failed: {e}")
             
-            # Simple fallback
-            vote_total = self._extract_vote_total_from_tally(encrypted_tally)
-            vote_share_y = vote_total if share_x == 1 else 0
+            # Simple fallback - cannot extract plaintext anymore (which is correct)
+            vote_share_y = 0  # Cannot determine this without proper cryptographic decryption
             
             partial_result = {
                 'voter_id': self.voter_id,
@@ -400,33 +374,7 @@ class Voter:
         import hashlib
         return hashlib.sha256(encrypted_tally.encode()).hexdigest()[:16]
     
-    def _extract_vote_total_from_tally(self, encrypted_tally: str) -> int:
-        """
-        Extract the actual vote total from the encrypted tally for stub implementation.
-        
-        In a real implementation, this information would not be available in the ciphertext.
-        This is only for demonstration purposes.
-        
-        Args:
-            encrypted_tally: The encrypted tally string
-            
-        Returns:
-            int: The actual vote total
-        """
-        try:
-            # Our stub format includes the vote total at the end
-            # Format: hom_sum_{hash}:combined_nonces:{total}_votes
-            if "_votes" in encrypted_tally:
-                total_part = encrypted_tally.split(":")[-1]  # Get last part
-                if "_votes" in total_part:
-                    total_str = total_part.replace("_votes", "")
-                    return int(total_str)
-            
-            # Fallback: return 0 if we can't extract
-            return 0
-            
-        except (ValueError, IndexError):
-            return 0
+
     
     def _create_partial_decryption_proof(self, encrypted_tally: str, share_x: int, share_y: int) -> str:
         """

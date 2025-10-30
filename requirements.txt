@@ -1,0 +1,5 @@
+cffi==2.0.0
+cryptography==46.0.3
+numpy==2.3.4
+pycparser==2.23
+tenseal==0.3.16
