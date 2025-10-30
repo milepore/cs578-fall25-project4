@@ -5,8 +5,7 @@ from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X
 import hashlib
 
 # Import our ElGamal implementation
-from elgamal_curve25519 import ElGamalCurve25519
-
+from threshold_elgamal import ThresholdElGamal
 
 class Voter:
     """
@@ -335,8 +334,9 @@ class Voter:
                     ciphertext = (c1_bytes, c2_bytes)
                     
                     # Perform ElGamal partial decryption using the secret share
-                    elgamal = ElGamalCurve25519()
-                    partial_decrypt_bytes = elgamal.threshold_decrypt_partial(ciphertext, share_y)
+                    # Use a minimal ElGamal instance (no discrete log table needed for partial decryption)
+                    elgamal = ThresholdElGamal(max_votes=1)  # Minimal table for partial decryption
+                    partial_decrypt_bytes = elgamal.partial_decrypt(ciphertext, share_y)
                     
                     partial_result = {
                         'voter_id': self.voter_id,

@@ -113,3 +113,13 @@ plaintext_total = server.decrypt_results(voter_ids[:3], voters[:3])
 ```
 
 This design provides a robust, privacy-preserving voting system suitable for group decision-making scenarios where vote privacy and result integrity are critical requirements.
+
+## Tradeoffs
+
+The Elgamal algorithm requires solving the discrete log problem in order to implement threshold decisioning.  For this implementation, we are assuming a small number of votes are being tallied (<1000).  Given this simplification, we can precompute the discrete log table.
+
+An alternative (but more complicated) implementation might be to use a different algorithm like Paillier - though this requires significantly more complicated logic when it comes to key management.
+
+## Other choices
+
+We used Shamir's secret sharing algorithm.  We could have instead used a verifiable secret sharing algorithm like Feldman's or Pedersen's scheme to distribute the keys and then allow a party to validate their share to ensure that its correct.
