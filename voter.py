@@ -1,7 +1,6 @@
 from decision_server import DecisionServer
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519
-from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
 import hashlib
 
 # Import our BGV threshold crypto implementation
@@ -235,7 +234,6 @@ class Voter:
         Returns:
             str: The zero-knowledge proof
         """
-        import hashlib
         import secrets
         
         # Stub implementation - create a "proof" that includes necessary components
@@ -291,75 +289,22 @@ class Voter:
         Raises:
             ValueError: If voter doesn't have a key share
         """
-        if not self.has_key_share():
-            raise ValueError(f"Voter {self.voter_id} has no key share for decryption")
-        
-        print(f"Voter {self.voter_id}: Performing partial decryption of tally")
-        
         # Get this voter's Shamir share
         if self.key_share is None:
             raise ValueError(f"Voter {self.voter_id} key share is None")
         share_x, share_y = self.key_share
+        # For BGV, partial decryption is just providing the secret share
+        # The actual BGV partial decryption happens in the crypto system
         
-        try:
-            # Parse the BGV ciphertext from the encrypted tally (JSON format)
-            import json
-            try:
-                ciphertext_dict = json.loads(encrypted_tally)
-                # We have a valid BGV ciphertext in JSON format
-                
-                # For BGV, partial decryption is just providing the secret share
-                # The actual BGV partial decryption happens in the crypto system
-                
-                partial_result = {
-                    'voter_id': self.voter_id,
-                    'x': share_x,
-                    'y': share_y,  # BGV uses both x and y from the Shamir share
-                    'tally_hash': self._hash_tally(encrypted_tally),
-                    'decryption_proof': self._create_partial_decryption_proof(encrypted_tally, share_x, share_y)
-                }
-                
-                print(f"Voter {self.voter_id}: BGV partial decryption completed")
-                print(f"  Share used: ({share_x}, {str(share_y)[:10]}...)")
-                print(f"  Share values provided for threshold reconstruction")
-                
-                return partial_result
-                
-            except json.JSONDecodeError:
-                raise ValueError(f"Invalid BGV ciphertext format: {encrypted_tally[:100]}...")
-            
-            # Fallback for other formats - cannot extract plaintext total anymore
-            # This is proper - in real cryptographic systems, you can't see plaintext from ciphertext
-            vote_share_y = 0  # Cannot determine this without proper decryption
-            
-            partial_result = {
-                'voter_id': self.voter_id,
-                'x': share_x,
-                'y': vote_share_y,
-                'tally_hash': self._hash_tally(encrypted_tally),
-                'decryption_proof': self._create_partial_decryption_proof(encrypted_tally, share_x, vote_share_y)
-            }
-            
-            print(f"Voter {self.voter_id}: Fallback partial decryption completed")
-            print(f"  Share coordinates: ({share_x}, {vote_share_y})")
-            
-            return partial_result
-            
-        except Exception as e:
-            print(f"Voter {self.voter_id}: Partial decryption failed: {e}")
-            
-            # Simple fallback - cannot extract plaintext anymore (which is correct)
-            vote_share_y = 0  # Cannot determine this without proper cryptographic decryption
-            
-            partial_result = {
-                'voter_id': self.voter_id,
-                'x': share_x,
-                'y': vote_share_y,
-                'tally_hash': self._hash_tally(encrypted_tally),
-                'decryption_proof': self._create_partial_decryption_proof(encrypted_tally, share_x, vote_share_y)
-            }
-            
-            return partial_result
+        partial_result = {
+            'voter_id': self.voter_id,
+            'x': share_x,
+            'y': share_y,  # BGV uses both x and y from the Shamir share
+            'tally_hash': self._hash_tally(encrypted_tally),
+            'decryption_proof': self._create_partial_decryption_proof(encrypted_tally, share_x, share_y)
+        }
+        
+        return partial_result
     
     def _hash_tally(self, encrypted_tally: str) -> str:
         """
@@ -371,7 +316,6 @@ class Voter:
         Returns:
             str: Hash of the tally
         """
-        import hashlib
         return hashlib.sha256(encrypted_tally.encode()).hexdigest()[:16]
     
 
@@ -398,7 +342,6 @@ class Voter:
         Returns:
             str: Proof of correct partial decryption
         """
-        import hashlib
         import secrets
         
         # Create proof components

@@ -1,17 +1,11 @@
 import secrets
-import random
 from typing import List, Tuple
-from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.exceptions import InvalidSignature
 import hashlib
 
 # Import our BGV-based threshold crypto system
 from bgv_threshold_crypto import BGVThresholdCrypto, BGVCiphertext
-
-# Shamir's Secret Sharing Constants
-SHAMIR_PRIME = 2**127 - 1  # Mersenne prime for finite field arithmetic
-
 
 class DecisionServer:
     """
@@ -133,27 +127,10 @@ class DecisionServer:
         print(f"DecisionServer: BGV threshold crypto keys generated and distributed")
         
         return public_context
-    
-    def _evaluate_polynomial(self, coefficients: List[int], x: int, prime: int) -> int:
-        """
-        Evaluate polynomial at given x using Horner's method in finite field.
         
-        Args:
-            coefficients: Polynomial coefficients [a0, a1, a2, ...]
-            x: Point to evaluate at
-            prime: Prime for finite field arithmetic
-            
-        Returns:
-            Value of polynomial at x mod prime
-        """
-        result = 0
-        for coeff in reversed(coefficients):
-            result = (result * x + coeff) % prime
-        return result
-    
     def _authenticate_voter(self, voter) -> bool:
         """
-        Authenticate a voter using public key signature challenge (stub implementation).
+        Authenticate a voter using public key signature challenge
         
         In a real implementation, this would:
         1. Generate a random challenge message
@@ -167,7 +144,6 @@ class DecisionServer:
         Returns:
             bool: True if authentication succeeds, False otherwise
         """
-        # Stub implementation - always returns True for now
         # In practice, this would involve cryptographic signature verification
         
         # Check if voter is registered
@@ -179,10 +155,10 @@ class DecisionServer:
         challenge = self._generate_auth_challenge()
         print(f"Sending authentication challenge to voter {voter.voter_id}")
         
-        # Get voter's signature response (stub)
+        # Get voter's signature response
         signature = voter.sign_challenge(challenge)
         
-        # Verify signature using registered public key (stub)
+        # Verify signature using registered public key
         registered_public_key = self.get_voter_public_key(voter.voter_id)
         if registered_public_key is None:
             print(f"Authentication failed: No public key found for voter {voter.voter_id}")
@@ -232,43 +208,10 @@ class DecisionServer:
             # Verify the signature
             public_key.verify(signature_bytes, message)
             return True
-            
-        except (ValueError, InvalidSignature) as e:
-            print(f"DecisionServer: Ed25519 signature verification failed: {e}")
-            
-            # Fallback to stub verification for compatibility
-            expected_signature = f"signed_{message.hex()}_with_{public_key_hex}"
-            return signature == expected_signature
-        
+
         except Exception as e:
             print(f"DecisionServer: Signature verification error: {e}")
             return False
-    
-    def _generate_public_key_from_secret(self, secret_key: bytes) -> str:
-        """
-        Generate a corresponding public key from the secret key (stub implementation).
-        
-        In a real implementation, this would use proper cryptographic key derivation:
-        - For ECC: derive public key point from private key scalar
-        - For RSA: compute public key from private key components
-        - For symmetric schemes: derive a verification key or use key commitment
-        
-        Args:
-            secret_key: The secret key bytes
-            
-        Returns:
-            str: The corresponding public key
-        """
-        # Stub implementation - derive public key from secret using hash
-        # In practice, this would use proper cryptographic key derivation
-        import hashlib
-        
-        # Create a deterministic public key from the secret
-        hash_input = b"public_key_derivation:" + secret_key
-        public_key_hash = hashlib.sha256(hash_input).hexdigest()
-        public_key = f"pk_{public_key_hash[:32]}"
-        
-        return public_key
     
     def castVote(self, encrypted_vote: str, zkp: str, voter_id: int, signature: str) -> bool:
         """
@@ -720,7 +663,7 @@ class DecisionServer:
             voter = voter_lookup[voter_id]
             
             # Request partial decryption from this voter
-            partial_decryption = self._request_partial_decryption(voter, self._encrypted_tally)
+            partial_decryption = voter.perform_partial_decryption(self._encrypted_tally)
             if partial_decryption is None:
                 raise ValueError(f"Failed to get partial decryption from voter {voter_id}")
             
@@ -734,33 +677,7 @@ class DecisionServer:
         print(f"DecisionServer: Decryption complete. Total votes: {plaintext_total}")
         
         return plaintext_total
-    
-    def _request_partial_decryption(self, voter, encrypted_tally: str):
-        """
-        Request a partial decryption from a voter using their key share.
-        
-        Args:
-            voter: The Voter object to request decryption from
-            encrypted_tally: The encrypted tally to partially decrypt
-            
-        Returns:
-            Tuple containing the voter's share and partial decryption result
-        """
-        print(f"DecisionServer: Requesting partial decryption from voter {voter.voter_id}")
-        
-        # Verify voter has a key share
-        if not voter.has_key_share():
-            print(f"DecisionServer: Voter {voter.voter_id} has no key share")
-            return None
-        
-        # Request partial decryption
-        try:
-            partial_decryption = voter.perform_partial_decryption(encrypted_tally)
-            return partial_decryption
-        except Exception as e:
-            print(f"DecisionServer: Failed to get partial decryption from voter {voter.voter_id}: {e}")
-            return None
-    
+     
     def _reconstruct_secret_from_shares(self, partial_decryptions: List) -> int:
         """
         Reconstruct the vote total using BGV threshold decryption.
@@ -810,31 +727,6 @@ class DecisionServer:
         return plaintext_total
         
         raise ValueError("Could not parse encrypted tally for decryption")
-    
-    def _mod_inverse(self, a: int, m: int) -> int:
-        """
-        Compute modular multiplicative inverse using extended Euclidean algorithm.
-        
-        Args:
-            a: Number to find inverse of
-            m: Modulus
-            
-        Returns:
-            int: Modular inverse of a mod m
-        """
-        def extended_gcd(a, b):
-            if a == 0:
-                return b, 0, 1
-            gcd, x1, y1 = extended_gcd(b % a, a)
-            x = y1 - (b // a) * x1
-            y = x1
-            return gcd, x, y
-        
-        gcd, x, _ = extended_gcd(a % m, m)
-        if gcd != 1:
-            raise ValueError("Modular inverse does not exist")
-        
-        return (x % m + m) % m
     
     def can_tally(self) -> bool:
         """
