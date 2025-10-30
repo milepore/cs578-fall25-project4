@@ -25,7 +25,7 @@ def test_medium_scale_voting():
     
     print(f"1. Creating DecisionServer with {num_voters} voters...")
     start_time = time.time()
-    server = DecisionServer(num_voters, quorum_size)
+    server = DecisionServer(num_voters, quorum_size, security_level=128)
     setup_time = time.time() - start_time
     print(f"   Server setup time: {setup_time:.2f}s")
     

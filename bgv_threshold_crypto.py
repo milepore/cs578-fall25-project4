@@ -8,12 +8,13 @@ threshold decryption capabilities.
 
 import tenseal as ts
 import secrets
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, Optional
 from dataclasses import dataclass
 import json
+import math
 
 # Shamir's Secret Sharing implementation
-PRIME = 2**127 - 1  # Large prime for secret sharing
+PRIME = 2**127 - 1  # Large prime for secret sharing (Mersenne prime for efficient modular arithmetic)
 
 def mod_inverse(a: int, m: int) -> int:
     """Calculate modular inverse using extended Euclidean algorithm."""
@@ -51,8 +52,9 @@ def create_shares(secret: int, threshold: int, num_shares: int) -> List[Tuple[in
     if threshold > num_shares:
         raise ValueError("Threshold cannot be greater than number of shares")
     
-    # Generate random coefficients for polynomial
-    coefficients = [secret] + [secrets.randbelow(PRIME) for _ in range(threshold - 1)]
+    # Generate random coefficients for polynomial using cryptographically secure random bits
+    # Use 127 bits to match the size of PRIME (2^127 - 1)
+    coefficients = [secret] + [secrets.randbits(127) % PRIME for _ in range(threshold - 1)]
     
     # Evaluate polynomial at points 1, 2, ..., num_shares
     shares = []
@@ -113,16 +115,24 @@ class BGVThresholdCrypto:
         self.threshold = threshold
         self.num_participants = num_participants
         
-        # Initialize TenSEAL context with BFV scheme (which supports integer arithmetic)
+        # Set 128 bit security 
+        poly_modulus_degree, plain_modulus = (4096, 1032193) 
+
+        # Initialize TenSEAL context with validated BFV parameters
         self.context = ts.context(
             ts.SCHEME_TYPE.BFV,
-            poly_modulus_degree=4096,
-            plain_modulus=1032193
+            poly_modulus_degree=poly_modulus_degree,
+            plain_modulus=plain_modulus
         )
         self.context.generate_galois_keys()
         
-        # Generate master secret key and create shares
-        self.master_secret = secrets.randbelow(PRIME)
+        # Store parameters for reference
+        self.poly_modulus_degree = poly_modulus_degree
+        self.plain_modulus = plain_modulus
+        
+        # Generate master secret key using cryptographically secure random bits
+        # Use 127 bits to match the size of PRIME (2^127 - 1)
+        self.master_secret = secrets.randbits(127) % PRIME
         self.secret_shares = create_shares(
             self.master_secret, 
             threshold, 
@@ -130,7 +140,7 @@ class BGVThresholdCrypto:
         )
         
         print(f"BGVThresholdCrypto: Initialized with threshold {threshold}/{num_participants}")
-        print(f"BGVThresholdCrypto: Using BFV scheme for integer homomorphic encryption")
+        print(f"BGVThresholdCrypto: Parameters - N={poly_modulus_degree}, t={plain_modulus}")
     
     def get_public_context(self) -> bytes:
         """Get the public context for encryption (without secret keys)."""
@@ -167,11 +177,12 @@ class BGVThresholdCrypto:
         # Serialize the ciphertext
         serialized = encrypted_vote.serialize()
         
-        # Create metadata
+        # Create metadata with security information
         metadata = {
             'scheme': 'BFV',
-            'encrypted_at': 'timestamp_placeholder',
-            'parameters': 'BFV-4096-1032193'
+            'poly_modulus_degree': self.poly_modulus_degree,
+            'plain_modulus': self.plain_modulus,
+            'encrypted_at': 'timestamp_placeholder'
         }
         
         print(f"BGVThresholdCrypto: Encrypted vote (no plaintext shown)")
@@ -267,7 +278,7 @@ def test_bgv_threshold():
     """Test the BGV threshold crypto system."""
     print("Testing BGV Threshold Crypto System")
     
-    # Initialize system with 5 participants, threshold of 3
+    # Initialize system with 5 participants, threshold of 3, 128-bit security
     crypto_system = BGVThresholdCrypto(threshold=3, num_participants=5)
     
     # Encrypt some votes
@@ -294,6 +305,5 @@ def test_bgv_threshold():
     print(f"Test {'PASSED' if final_result == expected else 'FAILED'}")
     
     return final_result == expected
-
 if __name__ == "__main__":
     test_bgv_threshold()

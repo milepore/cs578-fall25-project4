@@ -134,31 +134,6 @@ class DecisionServer:
         
         return public_context
     
-    def _create_shamir_shares(self, secret: int, n: int, k: int) -> List[Tuple[int, int]]:
-        """
-        Create Shamir's secret shares.
-        
-        Args:
-            secret: The secret to be shared (as integer)
-            n: Total number of shares to create
-            k: Minimum number of shares needed to reconstruct secret (quorum)
-            
-        Returns:
-            List of (x, y) tuples representing the shares
-        """
-        # Use the global prime constant for the finite field
-        
-        # Generate random coefficients for polynomial of degree k-1
-        coefficients = [secret] + [random.randrange(1, SHAMIR_PRIME) for _ in range(k - 1)]
-        
-        # Create shares by evaluating polynomial at different x values
-        shares = []
-        for x in range(1, n + 1):
-            y = self._evaluate_polynomial(coefficients, x, SHAMIR_PRIME)
-            shares.append((x, y))
-        
-        return shares
-    
     def _evaluate_polynomial(self, coefficients: List[int], x: int, prime: int) -> int:
         """
         Evaluate polynomial at given x using Horner's method in finite field.
@@ -200,8 +175,8 @@ class DecisionServer:
             print(f"Authentication failed: Voter {voter.voter_id} not registered")
             return False
         
-        # Generate challenge (stub)
-        challenge = secrets.token_bytes(32)
+        # Generate challenge with security-level appropriate size
+        challenge = self._generate_auth_challenge()
         print(f"Sending authentication challenge to voter {voter.voter_id}")
         
         # Get voter's signature response (stub)
@@ -221,6 +196,18 @@ class DecisionServer:
             print(f"Voter {voter.voter_id} authentication failed - invalid signature")
         
         return is_valid
+    
+    def _generate_auth_challenge(self) -> bytes:
+        """
+        Generate authentication challenge with security-level appropriate size.
+        
+        Returns:
+            bytes: Random challenge bytes
+        """
+        # For 128-bit security, 16 bytes is 
+        challenge_bytes = 16  # At least 16 bytes
+        
+        return secrets.token_bytes(challenge_bytes)
     
     def _verify_signature(self, message: bytes, signature: str, public_key_hex: str) -> bool:
         """

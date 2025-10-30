@@ -43,7 +43,7 @@ The system implements a **threshold cryptographic voting scheme** with the follo
 1. **DecisionServer**: Central authority managing the voting process
 2. **Voters**: Individual participants with cryptographic identities
 3. **BGV/BFV Encryption**: Fully homomorphic encryption using TenSEAL library
-4. **Shamir's Secret Sharing**: Threshold decryption mechanism
+4. **Shamir's Secret Sharing**: Key splitting and distribution
 
 ### **Key Design Features**
 
