@@ -3,14 +3,30 @@
 * Create ZKP implementation for voter assertion
 * Create NIZKP implementation for total assertion
 
+## Quick Start
+
+### **Installation**
+```bash
+pip install tenseal numpy cryptography
+```
+
+### **Run the Simulation**
+```bash
+python simulation.py
+```
+
+This will run a complete voting simulation with 50 voters and a 35-voter threshold, demonstrating:
+- BGV homomorphic encryption of individual votes
+- Privacy-preserving homomorphic tallying  
+- Threshold decryption with Shamir's Secret Sharing
+- Complete vote privacy (no plaintext leakage)
+
 ## Code Requirements
 
-Python 3.13
-tenseal
-pycparser
-numpy
-cffi
-crytography
+- Python 3.13
+- tenseal (BGV/BFV homomorphic encryption)
+- numpy (numerical operations for TenSEAL)
+- cryptography (Ed25519 signatures, X25519 key exchange)
 
 ## Group Decisioning Protocol Implementation and Simulation
 
@@ -26,7 +42,7 @@ The system implements a **threshold cryptographic voting scheme** with the follo
 
 1. **DecisionServer**: Central authority managing the voting process
 2. **Voters**: Individual participants with cryptographic identities
-3. **ElGamal Encryption**: Homomorphic encryption on Curve25519
+3. **BGV/BFV Encryption**: Fully homomorphic encryption using TenSEAL library
 4. **Shamir's Secret Sharing**: Threshold decryption mechanism
 
 ### **Key Design Features**
@@ -37,16 +53,17 @@ The system implements a **threshold cryptographic voting scheme** with the follo
 - **Challenge-Response Authentication**: Server authenticates voters using cryptographic challenges before key distribution
 
 #### **2. Threshold Cryptography Setup**
-- **ElGamal Keypair Generation**: Server generates a master ElGamal keypair on Curve25519
-- **Shamir's Secret Sharing**: The private key is split into `n` shares using Shamir's scheme
+- **BGV Context Generation**: Server generates BGV homomorphic encryption context using TenSEAL
+- **Shamir's Secret Sharing**: A master secret is split into `n` shares using Shamir's scheme
 - **Quorum Requirement**: Only `k` out of `n` voters are needed for decryption (configurable quorum)
-- **Key Distribution**: Each authenticated voter receives their secret share and the public key
+- **Key Distribution**: Each authenticated voter receives their secret share and the public BGV context
 
 #### **3. Secure Voting Process**
 ```python
 def castVote(self, encrypted_vote: str, zkp: str, voter_id: int, signature: str) -> bool
 ```
-- **Vote Encryption**: Voters encrypt their binary votes (0 or 1) using ElGamal
+- **Vote Encryption**: Voters encrypt their binary votes (0 or 1) using BGV/BFV homomorphic encryption
+- **Complete Privacy**: Vote contents are fully hidden within BGV ciphertext structure - no plaintext leakage
 - **Zero-Knowledge Proofs**: Each vote includes a ZKP proving the encrypted value is either 0 or 1
 - **Digital Signatures**: All vote submissions are digitally signed for authenticity
 - **Double-Voting Prevention**: Server prevents the same voter from voting multiple times
@@ -55,8 +72,9 @@ def castVote(self, encrypted_vote: str, zkp: str, voter_id: int, signature: str)
 ```python
 def tally_vote(self) -> str
 ```
-- **Homomorphic Addition**: Uses ElGamal's multiplicative homomorphism (Enc(a) × Enc(b) = Enc(a + b))
+- **Homomorphic Addition**: Uses BGV's additive homomorphism (Enc(a) + Enc(b) = Enc(a + b))
 - **Batch Processing**: Combines all encrypted votes without decrypting individual votes
+- **No Discrete Logarithm**: BGV eliminates the need for discrete log solving, providing exact results
 - **Verification Proofs**: Generates Non-Interactive Zero-Knowledge proofs of correct tallying
 - **Quorum Enforcement**: Only performs tallying when minimum vote threshold is met
 
@@ -88,7 +106,8 @@ def decrypt_results(self, voter_ids_for_decryption: List[int], voters: List) -> 
 ### **Implementation Details**
 
 #### **Cryptographic Primitives**
-- **Curve25519**: Modern elliptic curve for ElGamal encryption
+- **BGVThresholdCrypto**: BGV/BFV threshold encryption implementation using TenSEAL
+- **TenSEAL BFV**: Industry-standard fully homomorphic encryption for integer arithmetic
 - **Ed25519**: Digital signatures for authentication
 - **SHA-256**: Cryptographic hashing for proofs and commitments
 - **Mersenne Prime (2^127 - 1)**: Finite field for Shamir's secret sharing
@@ -112,27 +131,75 @@ server = DecisionServer(number_voters=5, quorum=3)
 # Create and authenticate voters
 voters = [Voter(server, i) for i in range(5)]
 
-# Distribute cryptographic keys
-secret_key = server.create_and_distribute_key(voters)
+# Distribute BGV context and secret shares
+public_context = server.create_and_distribute_key(voters)
 
-# Voters cast encrypted votes
+# Voters cast encrypted votes using BGV
 for i, voter in enumerate(voters):
-    voter.castVote(vote_value)  # 0 or 1
+    voter.castVote(vote_value)  # 0 or 1, encrypted with BGV/BFV
 
-# Homomorphic tallying
+# Homomorphic tallying (BGV addition)
 encrypted_total = server.tally_vote()
 
-# Threshold decryption
+# Threshold decryption using Shamir reconstruction
 plaintext_total = server.decrypt_results(voter_ids[:3], voters[:3])
 ```
 
 This design provides a robust, privacy-preserving voting system suitable for group decision-making scenarios where vote privacy and result integrity are critical requirements.
 
-## Tradeoffs
+### **Repository Structure**
 
-The Elgamal algorithm requires solving the discrete log problem in order to implement threshold decisioning.  For this implementation, we are assuming a small number of votes are being tallied (<1000).  Given this simplification, we can precompute the discrete log table.
+#### **Core Implementation Files**
+- **`decision_server.py`**: Main DecisionServer class implementing the voting protocol
+- **`voter.py`**: Voter class handling individual participant operations  
+- **`bgv_threshold_crypto.py`**: BGV/BFV homomorphic encryption with threshold decryption
+- **`simulation.py`**: Complete voting simulation demonstrating the system
 
-An alternative (but more complicated) implementation might be to use a different algorithm like Paillier - though this requires significantly more complicated logic when it comes to key management.
+#### **Legacy/Alternative Implementations**  
+- **`threshold_elgamal.py`**: Previous ElGamal-based implementation (replaced by BGV)
+- **`simple_threshold_crypto.py`**: Simplified crypto implementation (replaced by BGV)
+
+#### **Testing and Validation**
+- **`tests/`**: Comprehensive test suite for various scenarios
+  - `test_threshold_elgamal.py`: Tests for the original ElGamal implementation
+  - `test_100_voters.py`: Large-scale voting scenario tests
+  - `test_optimized_*.py`: Performance and optimization validation
+
+#### **Utilities**
+- **`debug_discrete_log.py`**: Debugging tools for discrete logarithm operations (legacy)
+
+## Architecture Decisions
+
+### **BGV/BFV vs ElGamal**
+
+This implementation uses **BGV (Brakerski-Gentry-Vaikuntanathan)** fully homomorphic encryption via the TenSEAL library instead of ElGamal for several key advantages:
+
+**Benefits of BGV/BFV:**
+- **No Discrete Logarithm**: Eliminates the need to solve discrete log problems, providing exact integer results
+- **Scalable**: Handles large vote totals without precomputed lookup tables
+- **Industry Standard**: Uses well-tested, production-ready cryptographic libraries
+- **Complete Privacy**: Vote contents are fully hidden within the ciphertext structure
+- **Efficient Arithmetic**: Native support for integer addition with optimal performance
+
+**Previous ElGamal Limitations:**
+- Required solving discrete logarithm problems for decryption
+- Needed precomputed tables for vote totals (limited scalability)
+- Multiplicative homomorphism required careful handling
+- Mathematical overflow issues with large Lagrange coefficients in threshold scenarios
+
+### **Implementation Trade-offs**
+
+**Current BGV Approach:**
+- ✅ Exact arithmetic with no approximation errors
+- ✅ Scales to large vote counts without performance degradation  
+- ✅ Leverages battle-tested TenSEAL library
+- ✅ Complete elimination of vote content leakage
+- ⚠️ Requires additional dependency (TenSEAL/numpy)
+
+**Alternative Considerations:**
+- **Paillier**: Would provide similar homomorphic properties but with more complex key management
+- **CKKS**: Better for approximate arithmetic but unnecessary for integer vote counting
+- **Custom ElGamal**: Lower dependencies but significant mathematical complexity for threshold scenarios
 
 ## Other choices
 
