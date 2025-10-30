@@ -1,3 +1,17 @@
+## Code left todo
+
+* Create ZKP implementation for voter assertion
+* Create NIZKP implementation for total assertion
+
+## Code Requirements
+
+Python 3.13
+tenseal
+pycparser
+numpy
+cffi
+crytography
+
 ## Group Decisioning Protocol Implementation and Simulation
 
 This package contains a group decisioning server built upon cryptographic methods that allows a group to cast secret votes and get results as a group while ensuring Vote Secrecy and Threshold Access.
