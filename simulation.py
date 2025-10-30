@@ -16,7 +16,7 @@ def main():
     
     # Create a DecisionServer with 5 voters and a quorum of 3
     try:
-        server = DecisionServer(number_voters=5, quorum=3)
+        server = DecisionServer(number_voters=50, quorum=35)
         print(f"Created: {server}")
         
         # Create voters
@@ -45,8 +45,9 @@ def main():
         print(f"\nStarting voting process...")
         print(f"Quorum required: {server.quorum} votes")
         
-        # Have some voters cast votes
-        votes_to_cast = [1, 0, 1, 0, 1]  # Mix of yes/no votes
+        # create votes_to_cast as a list of length equal to number_voters with random 0/1 votes
+        import random
+        votes_to_cast = [random.randint(0, 1) for _ in range(server.number_voters)]
         
         for i, vote_value in enumerate(votes_to_cast):
             if i < len(voters):

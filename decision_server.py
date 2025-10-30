@@ -6,8 +6,8 @@ from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.exceptions import InvalidSignature
 import hashlib
 
-# Import our ElGamal implementation
-from elgamal_curve25519 import ElGamalCurve25519
+# Import our improved ElGamal implementation
+from threshold_elgamal import ThresholdElGamal
 
 # Shamir's Secret Sharing Constants
 SHAMIR_PRIME = 2**127 - 1  # Mersenne prime for finite field arithmetic
@@ -29,7 +29,8 @@ class DecisionServer:
         self.number_voters = number_voters
         self.quorum = quorum
         self.registered_voters = {}  # Dictionary to store voter_id -> public_key mappings
-        self.elgamal = ElGamalCurve25519()  # ElGamal encryption instance
+        # Initialize ThresholdElGamal with optimized discrete log table for expected vote count
+        self.elgamal = ThresholdElGamal(max_votes=number_voters)
         self.elgamal_public_key = None   # Will store the ElGamal public key
         
         # Validate inputs
@@ -117,19 +118,16 @@ class DecisionServer:
                 raise Exception(f"Authentication failed for voter {voter.voter_id}")
         print("All voters authenticated successfully!")
         
-        # Step 2: Generate ElGamal keypair for homomorphic encryption
-        elgamal_private_key, elgamal_public_key_obj = self.elgamal.generate_keypair()
-        elgamal_public_key_bytes = elgamal_public_key_obj.public_bytes_raw()
+        # Step 2: Generate ThresholdElGamal keypair for homomorphic encryption
+        elgamal_private_key, elgamal_public_key_bytes = self.elgamal.generate_keypair()
         self.elgamal_public_key = elgamal_public_key_bytes
         
-        # Step 3: Extract the private key scalar for Shamir sharing
-        # Note: In production, would use proper key extraction methods
-        private_key_bytes = elgamal_private_key.private_bytes_raw()
-        secret_int = int.from_bytes(private_key_bytes, byteorder='big')
+        # Step 3: Use the private key scalar for Shamir sharing
+        secret_int = elgamal_private_key
         
         # Create a derived public key identifier for voters
-        public_key = self._generate_public_key_from_secret(private_key_bytes)
-        print(f"Generated ElGamal public key: {public_key[:20]}...")
+        public_key = f"threshold_elgamal_pk_{elgamal_public_key_bytes.hex()[:32]}"
+        print(f"Generated ThresholdElGamal public key: {public_key[:20]}...")
         
         # Step 4: Create shares using Shamir's secret sharing of the private key
         shares = self._create_shamir_shares(secret_int, self.number_voters, self.quorum)
@@ -138,9 +136,9 @@ class DecisionServer:
         for i, voter in enumerate(voters):
             voter.receive_key_share_and_public_key(shares[i], public_key)
         
-        print(f"DecisionServer: ElGamal keys generated and distributed")
+        print(f"DecisionServer: ThresholdElGamal keys generated and distributed")
         
-        return private_key_bytes
+        return elgamal_private_key.to_bytes(32, 'big')
     
     def _create_shamir_shares(self, secret: int, n: int, k: int) -> List[Tuple[int, int]]:
         """
@@ -500,22 +498,22 @@ class DecisionServer:
         if not ciphertexts:
             raise ValueError("No valid ciphertexts found for homomorphic addition")
         
-        # Perform homomorphic multiplication (adds plaintexts) using ElGamal
-        print(f"DecisionServer: Multiplying {len(ciphertexts)} ElGamal ciphertexts...")
+        # Perform homomorphic addition using ThresholdElGamal
+        print(f"DecisionServer: Adding {len(ciphertexts)} ThresholdElGamal ciphertexts...")
         
         # Start with the first ciphertext
         total_ciphertext = ciphertexts[0]
         
-        # Multiply with remaining ciphertexts
+        # Add with remaining ciphertexts
         for i in range(1, len(ciphertexts)):
-            total_ciphertext = self.elgamal.homomorphic_multiply(total_ciphertext, ciphertexts[i])
-            print(f"  Multiplied ciphertext {i+1}")
+            total_ciphertext = self.elgamal.homomorphic_add(total_ciphertext, ciphertexts[i])
+            print(f"  Added ciphertext {i+1}")
         
         # Serialize the result for storage
         c1_total, c2_total = total_ciphertext
-        serialized_result = f"elgamal_sum_{c1_total.hex()}:{c2_total.hex()}:{total_actual_sum}_votes"
+        serialized_result = f"threshold_elgamal_sum_{c1_total.hex()}:{c2_total.hex()}:{total_actual_sum}_votes"
         
-        print(f"DecisionServer: ElGamal homomorphic sum computed from {len(ciphertexts)} ciphertexts")
+        print(f"DecisionServer: ThresholdElGamal homomorphic sum computed from {len(ciphertexts)} ciphertexts")
         print(f"DecisionServer: Result c1: {c1_total.hex()[:20]}...")
         print(f"DecisionServer: Result c2: {c2_total.hex()[:20]}...")
         
@@ -817,14 +815,16 @@ class DecisionServer:
             
             encrypted_tally = self._encrypted_tally
             
-            # Parse the ElGamal ciphertext from the serialized format
-            if encrypted_tally.startswith("elgamal_sum_"):
-                # Format: elgamal_sum_{c1_hex}:{c2_hex}:{total}_votes
+            # Parse the ThresholdElGamal ciphertext from the serialized format
+            if encrypted_tally.startswith("threshold_elgamal_sum_"):
+                # Format: threshold_elgamal_sum_{c1_hex}:{c2_hex}:{total}_votes
                 parts = encrypted_tally.split(':')
                 if len(parts) >= 3:
-                    c1_hex = parts[0].replace("elgamal_sum_", "")
+                    c1_hex = parts[0].replace("threshold_elgamal_sum_", "")
                     c2_hex = parts[1]
+                    c1_bytes = bytes.fromhex(c1_hex)
                     c2_bytes = bytes.fromhex(c2_hex)
+                    total_ciphertext = (c1_bytes, c2_bytes)
                     
                     # Collect partial decryption results
                     partial_results = []
@@ -834,20 +834,35 @@ class DecisionServer:
                         partial_bytes = partial.get('partial_decrypt_bytes', bytes(32))
                         partial_results.append(partial_bytes)
                         
-                        # Calculate Lagrange coefficient for this share
+                        # Calculate Lagrange coefficient for this share with modular arithmetic
                         x_i = partial['x']
                         coeff = 1
+                        
+                        # Use modular arithmetic to prevent coefficient explosion
+                        # Work in a reasonable finite field to keep numbers manageable
+                        MOD = 2**31 - 1  # Large prime for modular arithmetic
+                        
                         for j, other_partial in enumerate(partial_decryptions):
                             if i != j:
                                 x_j = other_partial['x']
-                                coeff *= (-x_j) // (x_i - x_j)  # Simplified coefficient
+                                numerator = (-x_j) % MOD
+                                denominator = (x_i - x_j) % MOD
+                                
+                                # Compute modular multiplicative inverse
+                                denominator_inv = self._mod_inverse(denominator, MOD)
+                                factor = (numerator * denominator_inv) % MOD
+                                coeff = (coeff * factor) % MOD
+                        
+                        # Convert back to signed integer for processing
+                        if coeff > MOD // 2:
+                            coeff = coeff - MOD
                         
                         lagrange_coeffs.append(coeff)
                         print(f"  Voter {partial['voter_id']}: Lagrange coeff = {coeff}")
                     
-                    # Use ElGamal threshold decryption
+                    # Use ThresholdElGamal threshold decryption
                     plaintext_total = self.elgamal.combine_partial_decryptions(
-                        c2_bytes, partial_results, lagrange_coeffs
+                        total_ciphertext, partial_results, lagrange_coeffs
                     )
                     
                     print(f"DecisionServer: ElGamal threshold decryption complete: {plaintext_total}")
