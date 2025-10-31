@@ -108,19 +108,12 @@ class Voter:
         Returns:
             str: The Ed25519 signature as hex string
         """
-        try:
-            # Sign the challenge using Ed25519
-            signature_bytes = self.private_key_obj.sign(challenge)
-            signature_hex = signature_bytes.hex()
-            
-            print(f"Voter {self.voter_id} signed challenge with Ed25519")
-            return signature_hex
-            
-        except Exception as e:
-            print(f"Voter {self.voter_id} signing failed: {e}")
-            # Fallback to stub for compatibility
-            signature = f"signed_{challenge.hex()}_with_{self.public_key_hex}"
-            return signature
+        # Sign the challenge using Ed25519
+        signature_bytes = self.private_key_obj.sign(challenge)
+        signature_hex = signature_bytes.hex()
+        
+        print(f"Voter {self.voter_id} signed challenge with Ed25519")
+        return signature_hex
     
     def castVote(self, vote: int) -> bool:
         """
@@ -288,20 +281,12 @@ class Voter:
         Returns:
             str: The Ed25519 signature as hex string
         """
-        try:
-            message_bytes = message.encode()
-            # Sign the message using Ed25519
-            signature_bytes = self.private_key_obj.sign(message_bytes)
-            signature_hex = signature_bytes.hex()
-            
-            return signature_hex
-            
-        except Exception as e:
-            print(f"Voter {self.voter_id} vote signing failed: {e}")
-            # Fallback to stub for compatibility
-            message_bytes = message.encode()
-            signature = f"signed_{message_bytes.hex()}_with_{self.public_key_hex}"
-            return signature
+        message_bytes = message.encode()
+        # Sign the message using Ed25519
+        signature_bytes = self.private_key_obj.sign(message_bytes)
+        signature_hex = signature_bytes.hex()
+        
+        return signature_hex
     
     def perform_partial_decryption(self, encrypted_tally: str) -> dict:
         """

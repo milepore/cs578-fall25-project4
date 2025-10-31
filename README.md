@@ -1,7 +1,6 @@
 ## Code left todo
 
-* Create ZKP implementation for voter assertion
-* Create NIZKP implementation for total assertion
+* Create NIZKP implementation for partial decription per voter
 
 ## Quick Start
 
