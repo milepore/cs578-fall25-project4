@@ -80,16 +80,10 @@ def main():
                 
                 print(f"✓ Results retrieved successfully:")
                 print(f"  - Total ciphertext: {results['total_ciphertext'][:40]}...")
-                print(f"  - Verification proof: {results['verification_proof'][:60]}...")
                 print(f"  - Number of votes: {results['num_votes']}")
                 print(f"  - Quorum requirement: {results['quorum']}")
                 print(f"  - Timestamp: {results['timestamp']}")
                 print(f"  - Voter IDs: {results['voter_ids']}")
-                
-                # Verify the tally proof
-                print(f"\nVerifying tally proof...")
-                is_valid = server.verify_tally_proof(results)
-                print(f"✓ Proof verification: {'PASSED' if is_valid else 'FAILED'}")
                 
                 # Perform decryption using threshold secret sharing
                 print(f"\nDecrypting results using threshold secret sharing...")

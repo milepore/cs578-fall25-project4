@@ -448,7 +448,7 @@ class DecisionServer:
         Get the tallied results along with verification proof.
         
         Returns:
-            dict: Contains 'total_ciphertext', 'verification_proof', and metadata
+            dict: Contains 'total_ciphertext', and metadata
             
         Raises:
             ValueError: If tally has not been computed yet
@@ -501,15 +501,9 @@ class DecisionServer:
         
         print(f"DecisionServer: Starting decryption process with {len(voter_ids_for_decryption)} voters")
         
-        # Step 1: Verify the NIZK proof from the tally
-        print(f"DecisionServer: Verifying tally NIZK proof...")
         results = self.get_tallied_results()
-        if not self.verify_tally_proof(results):
-            raise ValueError("Tally verification proof is invalid - cannot proceed with decryption")
         
-        print(f"✓ Tally NIZK proof verification passed")
-        
-        # Step 2: Get partial decryptions from each voter
+        # Step 1: Get partial decryptions from each voter
         partial_decryptions = []
         voter_lookup = {v.voter_id: v for v in voters}
         
@@ -527,8 +521,8 @@ class DecisionServer:
             
             partial_decryptions.append(partial_decryption)
             print(f"  ✓ Received partial decryption from voter {voter_id}")
-        
-        # Step 3: Combine partial decryptions using Shamir's secret reconstruction
+
+        # Step 2: Combine partial decryptions using Shamir's secret reconstruction
         print(f"DecisionServer: Combining {len(partial_decryptions)} partial decryptions...")
         plaintext_total = self._reconstruct_secret_from_shares(partial_decryptions)
         
