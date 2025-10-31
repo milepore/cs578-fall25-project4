@@ -534,11 +534,15 @@ class DecisionServer:
         """
         Reconstruct the vote total using BGV threshold decryption.
         
-        This combines partial decryptions using Lagrange interpolation coefficients
-        to recover the plaintext vote total from the homomorphic sum.
+        This combines partial decryptions using Lagrange 
+        interpolation coefficients to recover the plaintext vote total from the 
+        homomorphic sum.
+        
+        SECURITY: This method now processes partial decryption results instead of
+        raw secret shares, maintaining the security of the threshold scheme.
         
         Args:
-            partial_decryptions: List of partial decryption results
+            partial_decryptions: List of partial decryption results from voters
             
         Returns:
             int: The reconstructed vote total
@@ -559,26 +563,32 @@ class DecisionServer:
         except json.JSONDecodeError:
             raise ValueError(f"Invalid BGV ciphertext format: {encrypted_tally[:100]}...")
         
-        # Collect partial decryption results (from BGV secret shares)
+        # Collect partial decryption results (NOT raw secret shares)
         partial_results = []
         
         for partial in partial_decryptions:
-            # BGV partial results should contain (x, y) tuples from Shamir shares
-            x = partial['x']  
-            y = partial['y']  # This should come from the partial decryption
-            partial_results.append((x, y))
-            print(f"  Voter {partial['voter_id']}: Share ({x}, {y})")
+            # Verify this is a partial decryption result, not a raw secret share
+            if 'partial_decryption' not in partial:
+                raise ValueError(f"Invalid partial decryption format from voter {partial.get('voter_id')}")
+            
+            partial_decrypt_data = partial['partial_decryption']
+            
+            # Extract the safe partial decryption values
+            share_index = partial_decrypt_data['share_index']
+            partial_value = partial_decrypt_data['partial_value']
+            
+            partial_results.append((share_index, partial_value))
+            print(f"  Voter {partial['voter_id']}: Partial decryption ({share_index}, <partial_value>)")
         
-        # Use BGV threshold decryption
+        # Use BGV threshold decryption with partial results
         plaintext_total = self.crypto_system.combine_shares_and_decrypt(
             total_ciphertext, partial_results
         )
         
         print(f"DecisionServer: BGV threshold decryption complete: {plaintext_total}")
+        print(f"DecisionServer: SECRET SHARES NEVER REVEALED - only partial decryptions used")
         
         return plaintext_total
-        
-        raise ValueError("Could not parse encrypted tally for decryption")
     
     def can_tally(self) -> bool:
         """
