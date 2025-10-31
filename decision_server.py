@@ -6,7 +6,7 @@ import hashlib
 
 # Import our BGV-based threshold crypto system
 from bgv_threshold_crypto import BGVThresholdCrypto, BGVCiphertext
-from schnorr_zkp import verify_zkp_from_json
+from schnorr_zkp import verify_zkp_from_json, verify_partial_decryption_zkp_from_json
 
 class DecisionServer:
     """
@@ -519,27 +519,28 @@ class DecisionServer:
             if partial_decryption is None:
                 raise ValueError(f"Failed to get partial decryption from voter {voter_id}")
             
+            # Step 1.5: Verify the partial decryption zero-knowledge proof
+            if not self._verify_partial_decryption_proof(partial_decryption, self._encrypted_tally):
+                raise ValueError(f"Invalid partial decryption proof from voter {voter_id}")
+                
             partial_decryptions.append(partial_decryption)
-            print(f"  ✓ Received partial decryption from voter {voter_id}")
+            print(f"  ✓ Received and verified partial decryption from voter {voter_id}")
 
         # Step 2: Combine partial decryptions using Shamir's secret reconstruction
         print(f"DecisionServer: Combining {len(partial_decryptions)} partial decryptions...")
-        plaintext_total = self._reconstruct_secret_from_shares(partial_decryptions)
+        plaintext_total = self._reconstruct_vote_from_shares(partial_decryptions)
         
         print(f"DecisionServer: Decryption complete. Total votes: {plaintext_total}")
         
         return plaintext_total
      
-    def _reconstruct_secret_from_shares(self, partial_decryptions: List) -> int:
+    def _reconstruct_vote_from_shares(self, partial_decryptions: List) -> int:
         """
         Reconstruct the vote total using BGV threshold decryption.
         
         This combines partial decryptions using Lagrange 
         interpolation coefficients to recover the plaintext vote total from the 
         homomorphic sum.
-        
-        SECURITY: This method now processes partial decryption results instead of
-        raw secret shares, maintaining the security of the threshold scheme.
         
         Args:
             partial_decryptions: List of partial decryption results from voters
@@ -589,6 +590,48 @@ class DecisionServer:
         print(f"DecisionServer: SECRET SHARES NEVER REVEALED - only partial decryptions used")
         
         return plaintext_total
+    
+    def _verify_partial_decryption_proof(self, partial_decryption: dict, encrypted_tally: str) -> bool:
+        """
+        Verify the zero-knowledge proof of correct partial decryption.
+        
+        This method verifies that:
+        1. The voter correctly computed their partial decryption using their secret share
+        2. The partial decryption corresponds to the given encrypted tally
+        3. The voter knows their secret share without revealing it
+        
+        Args:
+            partial_decryption: Partial decryption result from voter containing proof
+            encrypted_tally: The encrypted tally being partially decrypted
+            
+        Returns:
+            bool: True if the proof is valid, False otherwise
+        """
+        try:
+            # Extract the proof from the partial decryption result
+            if 'decryption_proof' not in partial_decryption:
+                print(f"DecisionServer: No decryption proof found in partial decryption from voter {partial_decryption.get('voter_id', 'unknown')}")
+                return False
+            
+            zkp_proof = partial_decryption['decryption_proof']
+            partial_result = partial_decryption['partial_decryption']
+            voter_id = partial_decryption['voter_id']
+            
+            print(f"DecisionServer: Verifying partial decryption ZKP from voter {voter_id}")
+            
+            # Verify the zero-knowledge proof using the standalone verification function
+            is_valid = verify_partial_decryption_zkp_from_json(zkp_proof, encrypted_tally, partial_result)
+            
+            if is_valid:
+                print(f"DecisionServer: Partial decryption ZKP verification PASSED for voter {voter_id}")
+            else:
+                print(f"DecisionServer: Partial decryption ZKP verification FAILED for voter {voter_id}")
+            
+            return is_valid
+            
+        except Exception as e:
+            print(f"DecisionServer: Error verifying partial decryption proof: {e}")
+            return False
     
     def can_tally(self) -> bool:
         """
