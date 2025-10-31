@@ -5,6 +5,7 @@ This directory contains all test files for the CS578 Fall 2025 Project 4 - Secur
 ## Test Files
 
 ### Core Tests
+- **`test_schnorr_zkp.py`** - Comprehensive tests for refactored Schnorr ZKP base class and both proof systems
 - **`test_zkp.py`** - Tests core ZKP functionality and SchnorrDisjunctiveProof class
 - **`test_verification.py`** - Tests the standalone ZKP verification function
 - **`test_integration.py`** - Full integration tests with mock DecisionServer
@@ -17,6 +18,7 @@ This directory contains all test files for the CS578 Fall 2025 Project 4 - Secur
 ### Run Individual Tests
 ```bash
 # From the project root directory:
+python tests/test_schnorr_zkp.py
 python tests/test_zkp.py
 python tests/test_verification.py
 python tests/test_integration.py
@@ -34,7 +36,7 @@ All tests should pass with output like:
 ============================================================
 TEST SUMMARY
 ============================================================
-schnorr_zkp.py            ✅ PASSED
+test_schnorr_zkp.py       ✅ PASSED
 test_zkp.py               ✅ PASSED
 test_verification.py      ✅ PASSED
 test_integration.py       ✅ PASSED

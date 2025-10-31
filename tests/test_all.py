@@ -46,10 +46,10 @@ def run_test(test_file, description):
 def main():
     """Run all tests in sequence."""
     print("Comprehensive Test Suite for Refactored ZKP System")
-    print("Testing after extracting SchnorrDisjunctiveProof to schnorr_zkp.py")
+    print("Testing refactored Schnorr ZKP base class and extracted test modules")
     
     tests = [
-        ("schnorr_zkp.py", "Standalone Schnorr ZKP Module"),
+        ("test_schnorr_zkp.py", "Comprehensive Schnorr ZKP Tests"),
         ("test_zkp.py", "Core ZKP Functionality Tests"),
         ("test_verification.py", "ZKP Verification Method Tests"),
         ("test_integration.py", "Full Voting Integration Tests")
