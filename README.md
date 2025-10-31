@@ -165,8 +165,19 @@ This design provides a robust, privacy-preserving voting system suitable for gro
 
 ## Potential Improvements
 
+### Separation of Decision Server from Voter Registration and Key Generation
+
+Right now the central server not only gets the voter registrations, but also ships the partial keys to each voter.  This means that the central server COULD store that key and use it later.  However our implementation doesn't ever get the full key in the server.
+
+Ideally we would create a registry that registers all the voters (and their public keys) and distributes the shared key to them.  The decision server would collect the votes, but never have access to the key.
+
+In this case we can just say that the decision server discards the private key, but in production, we might want to separate the concerns.
+
+### Secret Sharing Protocol Improvements
+
 We used Shamir's secret sharing algorithm.  We could have instead used a verifiable secret sharing algorithm like Feldman's or Pedersen's scheme to distribute the keys and then allow a party to validate their share to ensure that its correct.
 
+### Vote Registry Signature 
 Another potential improvement might be to have the entire cryptographic vote registry be signed as each new vote is added - and then sent to the voter.
 
 This would ensure that prior votes could not be dropped without invalidating the signatures in the register as we go through the algorithm.

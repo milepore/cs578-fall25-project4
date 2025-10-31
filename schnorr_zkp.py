@@ -18,6 +18,12 @@ import secrets
 from typing import Dict, Any
 
 
+debug_on=False
+
+def debug(msg):
+    if (debug_on):
+        print(msg)
+
 class SchnorrProofBase:
     """
     Base class for Schnorr-based zero-knowledge proofs.
@@ -232,7 +238,7 @@ class SchnorrDisjunctiveProof(SchnorrProofBase):
             
             # Verify challenge consistency: c0 + c1 must equal overall challenge
             if (c0 + c1) % self.q != challenge % self.q:
-                print(f"Challenge consistency check failed: c0+c1={c0+c1} != challenge={challenge}")
+                debug(f"Challenge consistency check failed: c0+c1={c0+c1} != challenge={challenge}")
                 return False
             
             # Recreate Fiat-Shamir challenge from public components
@@ -246,13 +252,13 @@ class SchnorrDisjunctiveProof(SchnorrProofBase):
             
             expected_challenge = self._hash_to_scalar(challenge_input)
             if challenge != expected_challenge:
-                print(f"Fiat-Shamir challenge mismatch: {challenge} != {expected_challenge}")
+                debug(f"Fiat-Shamir challenge mismatch: {challenge} != {expected_challenge}")
                 return False
             
             # Verify encrypted vote hash binding
             expected_hash = hashlib.sha256(encrypted_vote.encode()).hexdigest()[:16]
             if proof['encrypted_vote_hash'] != expected_hash:
-                print(f"Encrypted vote binding failed: hash mismatch")
+                debug(f"Encrypted vote binding failed: hash mismatch")
                 return False
             
             # In a full implementation, we would also verify:
@@ -260,17 +266,17 @@ class SchnorrDisjunctiveProof(SchnorrProofBase):
             # A1 ?= z1*G - c1*(C-G)  (proving knowledge for vote=1 case)
             # This requires more complex elliptic curve operations
             
-            print(f"Schnorr disjunctive proof verification passed for voter {voter_id}")
+            debug(f"Schnorr disjunctive proof verification passed for voter {voter_id}")
             return True
             
         except KeyError as e:
-            print(f"Proof verification failed - missing field: {e}")
+            debug(f"Proof verification failed - missing field: {e}")
             return False
         except ValueError as e:
-            print(f"Proof verification failed - invalid format: {e}")
+            debug(f"Proof verification failed - invalid format: {e}")
             return False
         except Exception as e:
-            print(f"Proof verification failed: {e}")
+            debug(f"Proof verification failed: {e}")
             return False
 
 
@@ -301,27 +307,27 @@ def verify_zkp_from_json(zkp_json: str, encrypted_vote: str) -> bool:
             is_valid = proof_system.verify_proof(proof_dict, encrypted_vote)
             
             if is_valid:
-                print(f"ZKP verification PASSED for voter {proof_dict.get('voter_id', 'unknown')}")
+                debug(f"ZKP verification PASSED for voter {proof_dict.get('voter_id', 'unknown')}")
             else:
-                print(f"ZKP verification FAILED for voter {proof_dict.get('voter_id', 'unknown')}")
+                debug(f"ZKP verification FAILED for voter {proof_dict.get('voter_id', 'unknown')}")
             
             return is_valid
             
         elif proof_dict.get('type') == 'schnorr_disjunctive_fallback':
-            print(f"ZKP fallback proof detected for voter {proof_dict.get('voter_id', 'unknown')}")
+            debug(f"ZKP fallback proof detected for voter {proof_dict.get('voter_id', 'unknown')}")
             # For fallback proofs, just verify basic structure
             required_fields = ['voter_id', 'encrypted_vote_hash', 'error']
             return all(field in proof_dict for field in required_fields)
         
         else:
-            print(f"Unknown ZKP proof type: {proof_dict.get('type', 'missing')}")
+            debug(f"Unknown ZKP proof type: {proof_dict.get('type', 'missing')}")
             return False
             
     except json.JSONDecodeError as e:
-        print(f"ZKP verification failed - invalid JSON: {e}")
+        debug(f"ZKP verification failed - invalid JSON: {e}")
         return False
     except Exception as e:
-        print(f"ZKP verification failed: {e}")
+        debug(f"ZKP verification failed: {e}")
         return False
 
 
@@ -469,36 +475,36 @@ class SchnorrPartialDecryptionProof(SchnorrProofBase):
             
             expected_challenge = self._hash_to_scalar(challenge_input)
             if challenge != expected_challenge:
-                print(f"Partial decryption proof: Fiat-Shamir challenge mismatch")
+                debug(f"Partial decryption proof: Fiat-Shamir challenge mismatch")
                 return False
             
             # Verify encrypted tally hash binding
             expected_tally_hash = hashlib.sha256(encrypted_tally.encode()).hexdigest()[:16]
             if proof['encrypted_tally_hash'] != expected_tally_hash:
-                print(f"Partial decryption proof: Encrypted tally binding failed")
+                debug(f"Partial decryption proof: Encrypted tally binding failed")
                 return False
             
             # Verify partial decryption result hash binding
             expected_result_hash = hashlib.sha256(str(partial_decryption_result).encode()).hexdigest()[:16]
             if proof['partial_result_hash'] != expected_result_hash:
-                print(f"Partial decryption proof: Partial result binding failed")
+                debug(f"Partial decryption proof: Partial result binding failed")
                 return False
             
             # In a full implementation, we would also verify:
             # z*G ?= C + challenge*S  (proving knowledge of secret share)
             # This requires more complex elliptic curve operations
             
-            print(f"Schnorr partial decryption proof verification passed for voter {voter_id}")
+            debug(f"Schnorr partial decryption proof verification passed for voter {voter_id}")
             return True
             
         except KeyError as e:
-            print(f"Partial decryption proof verification failed - missing field: {e}")
+            debug(f"Partial decryption proof verification failed - missing field: {e}")
             return False
         except ValueError as e:
-            print(f"Partial decryption proof verification failed - invalid format: {e}")
+            debug(f"Partial decryption proof verification failed - invalid format: {e}")
             return False
         except Exception as e:
-            print(f"Partial decryption proof verification failed: {e}")
+            debug(f"Partial decryption proof verification failed: {e}")
             return False
 
 
@@ -531,25 +537,25 @@ def verify_partial_decryption_zkp_from_json(zkp_json: str, encrypted_tally: str,
             is_valid = proof_system.verify_proof(proof_dict, encrypted_tally, partial_decryption_result)
             
             if is_valid:
-                print(f"Partial decryption ZKP verification PASSED for voter {proof_dict.get('voter_id', 'unknown')}")
+                debug(f"Partial decryption ZKP verification PASSED for voter {proof_dict.get('voter_id', 'unknown')}")
             else:
-                print(f"Partial decryption ZKP verification FAILED for voter {proof_dict.get('voter_id', 'unknown')}")
+                debug(f"Partial decryption ZKP verification FAILED for voter {proof_dict.get('voter_id', 'unknown')}")
             
             return is_valid
         
         else:
-            print(f"Unknown partial decryption ZKP proof type: {proof_dict.get('type', 'missing')}")
+            debug(f"Unknown partial decryption ZKP proof type: {proof_dict.get('type', 'missing')}")
             return False
             
     except json.JSONDecodeError as e:
-        print(f"Partial decryption ZKP verification failed - invalid JSON: {e}")
+        debug(f"Partial decryption ZKP verification failed - invalid JSON: {e}")
         return False
     except Exception as e:
-        print(f"Partial decryption ZKP verification failed: {e}")
+        debug(f"Partial decryption ZKP verification failed: {e}")
         return False
 
 
 if __name__ == "__main__":
     # For backward compatibility, run the tests from the test module
-    print("Schnorr ZKP module loaded successfully.")
-    print("Run 'python tests/test_schnorr_zkp.py' for comprehensive tests.")
+    debug("Schnorr ZKP module loaded successfully.")
+    debug("Run 'python tests/test_schnorr_zkp.py' for comprehensive tests.")

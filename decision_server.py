@@ -8,6 +8,13 @@ import hashlib
 from bgv_threshold_crypto import BGVThresholdCrypto, BGVCiphertext
 from schnorr_zkp import verify_zkp_from_json, verify_partial_decryption_zkp_from_json
 
+
+debug_on=False
+
+def debug(msg):
+    if (debug_on):
+        print(msg)
+
 class DecisionServer:
     """
     A server that manages decision-making processes with voter quorum requirements.
@@ -106,11 +113,11 @@ class DecisionServer:
             raise ValueError("Not all voters are registered")
         
         # Step 1: Authenticate all voters using public key signature challenge
-        print("Starting authentication challenge for all voters...")
+        debug("Starting authentication challenge for all voters...")
         for voter in voters:
             if not self._authenticate_voter(voter):
                 raise Exception(f"Authentication failed for voter {voter.voter_id}")
-        print("All voters authenticated successfully!")
+        debug("All voters authenticated successfully!")
         
         # Step 2: Get public context for BGV encryption
         public_context = self.crypto_system.get_public_context()
@@ -118,15 +125,15 @@ class DecisionServer:
         
         # Create a derived public key identifier for voters
         public_key = f"bgv_threshold_pk_{hashlib.sha256(public_context).hexdigest()[:32]}"
-        print(f"Generated BGV public context: {public_key[:20]}...")
+        debug(f"Generated BGV public context: {public_key[:20]}...")
         
         # Step 3: Distribute BGV secret shares and public context to authenticated voters
         for i, voter in enumerate(voters):
             secret_share = self.crypto_system.get_secret_share(i)
             voter.receive_key_share_and_public_key(secret_share, public_context)
-        
-        print(f"DecisionServer: BGV threshold crypto keys generated and distributed")
-        
+
+        debug("DecisionServer: BGV threshold crypto keys generated and distributed")
+
         return public_context
         
     def _authenticate_voter(self, voter) -> bool:
@@ -149,12 +156,12 @@ class DecisionServer:
         
         # Check if voter is registered
         if not self.is_voter_registered(voter.voter_id):
-            print(f"Authentication failed: Voter {voter.voter_id} not registered")
+            debug(f"Authentication failed: Voter {voter.voter_id} not registered")
             return False
         
         # Generate challenge with security-level appropriate size
         challenge = self._generate_auth_challenge()
-        print(f"Sending authentication challenge to voter {voter.voter_id}")
+        debug(f"Sending authentication challenge to voter {voter.voter_id}")
         
         # Get voter's signature response
         signature = voter.sign_challenge(challenge)
@@ -162,16 +169,16 @@ class DecisionServer:
         # Verify signature using registered public key
         registered_public_key = self.get_voter_public_key(voter.voter_id)
         if registered_public_key is None:
-            print(f"Authentication failed: No public key found for voter {voter.voter_id}")
+            debug(f"Authentication failed: No public key found for voter {voter.voter_id}")
             return False
         
         is_valid = self._verify_signature(challenge, signature, registered_public_key)
         
         if is_valid:
-            print(f"Voter {voter.voter_id} authentication successful")
+            debug(f"Voter {voter.voter_id} authentication successful")
         else:
-            print(f"Voter {voter.voter_id} authentication failed - invalid signature")
-        
+            debug(f"Voter {voter.voter_id} authentication failed - invalid signature")
+
         return is_valid
     
     def _generate_auth_challenge(self) -> bytes:
@@ -211,7 +218,7 @@ class DecisionServer:
             return True
 
         except Exception as e:
-            print(f"DecisionServer: Signature verification error: {e}")
+            debug(f"DecisionServer: Signature verification error: {e}")
             return False
     
     def castVote(self, encrypted_vote: str, zkp: str, voter_id: int, signature: str) -> bool:
@@ -227,22 +234,22 @@ class DecisionServer:
         Returns:
             bool: True if vote was accepted, False otherwise
         """
-        print(f"DecisionServer: Receiving vote from voter {voter_id}")
+        debug(f"DecisionServer: Receiving vote from voter {voter_id}")
         
         # Step 1: Verify voter is registered
         if not self.is_voter_registered(voter_id):
-            print(f"DecisionServer: Vote rejected - voter {voter_id} not registered")
+            debug(f"DecisionServer: Vote rejected - voter {voter_id} not registered")
             return False
         
         # Step 2: Verify signature
         vote_message = f"{encrypted_vote}|{zkp}|{voter_id}"
         if not self._verify_vote_signature(vote_message, signature, voter_id):
-            print(f"DecisionServer: Vote rejected - invalid signature from voter {voter_id}")
+            debug(f"DecisionServer: Vote rejected - invalid signature from voter {voter_id}")
             return False
         
         # Step 3: Verify zero-knowledge proof
         if not verify_zkp_from_json(zkp, encrypted_vote):
-            print(f"DecisionServer: Vote rejected - invalid ZKP from voter {voter_id}")
+            debug(f"DecisionServer: Vote rejected - invalid ZKP from voter {voter_id}")
             return False
         
         # Step 4: Store the vote (in practice, would check for double voting)
@@ -250,7 +257,7 @@ class DecisionServer:
             self.votes = {}
         
         if voter_id in self.votes:
-            print(f"DecisionServer: Vote rejected - voter {voter_id} already voted")
+            debug(f"DecisionServer: Vote rejected - voter {voter_id} already voted")
             return False
         
         self.votes[voter_id] = {
@@ -259,8 +266,8 @@ class DecisionServer:
             'signature': signature
         }
         
-        print(f"DecisionServer: Vote accepted from voter {voter_id}")
-        print(f"DecisionServer: Total votes received: {len(self.votes)}")
+        debug(f"DecisionServer: Vote accepted from voter {voter_id}")
+        debug(f"DecisionServer: Total votes received: {len(self.votes)}")
         
         return True
     
@@ -325,7 +332,7 @@ class DecisionServer:
         if not self.has_quorum():
             raise ValueError(f"Quorum not met. Need {self.quorum} votes, have {len(self.votes)}")
         
-        print(f"DecisionServer: Starting homomorphic tally of {len(self.votes)} votes")
+        debug(f"DecisionServer: Starting homomorphic tally of {len(self.votes)} votes")
         
         # Extract all encrypted votes
         encrypted_votes = [vote_data['encrypted_vote'] for vote_data in self.votes.values()]
@@ -335,7 +342,7 @@ class DecisionServer:
         # Store results for later retrieval
         self._encrypted_tally = total_ciphertext
         
-        print(f"DecisionServer: Tally complete. Total ciphertext: {total_ciphertext[:30]}...")        
+        debug(f"DecisionServer: Tally complete. Total ciphertext: {total_ciphertext[:30]}...")        
         return total_ciphertext
     
     def _homomorphic_add_votes(self, encrypted_votes: List[str]) -> str:
@@ -363,16 +370,16 @@ class DecisionServer:
                 ciphertext_dict = json.loads(encrypted_vote)
                 bgv_ciphertext = BGVCiphertext.from_dict(ciphertext_dict)
                 ciphertexts.append(bgv_ciphertext)
-                print(f"  Processing vote {i}: BGV ciphertext parsed")
+                debug(f"  Processing vote {i}: BGV ciphertext parsed")
                 
             except (ValueError, json.JSONDecodeError) as e:
-                print(f"  Warning: Could not parse encrypted vote {i}: {e}")
+                debug(f"  Warning: Could not parse encrypted vote {i}: {e}")
         
         if not ciphertexts:
             raise ValueError("No valid ciphertexts found for homomorphic addition")
         
         # Perform homomorphic addition using BGV
-        print(f"DecisionServer: Adding {len(ciphertexts)} BGV ciphertexts...")
+        debug(f"DecisionServer: Adding {len(ciphertexts)} BGV ciphertexts...")
         
         # Start with the first ciphertext
         total_ciphertext = ciphertexts[0]
@@ -380,14 +387,14 @@ class DecisionServer:
         # Add with remaining ciphertexts
         for i in range(1, len(ciphertexts)):
             total_ciphertext = self.crypto_system.homomorphic_add(total_ciphertext, ciphertexts[i])
-            print(f"  Added ciphertext {i+1}")
+            debug(f"  Added ciphertext {i+1}")
         
         # Serialize the result for storage (without revealing plaintext total)
         import json
         serialized_result = json.dumps(total_ciphertext.to_dict())
         
-        print(f"DecisionServer: BGV homomorphic sum computed from {len(ciphertexts)} ciphertexts")
-        print(f"DecisionServer: Result size: {len(total_ciphertext.serialized_data)} bytes")
+        debug(f"DecisionServer: BGV homomorphic sum computed from {len(ciphertexts)} ciphertexts")
+        debug(f"DecisionServer: Result size: {len(total_ciphertext.serialized_data)} bytes")
         
         return serialized_result
     
@@ -464,7 +471,7 @@ class DecisionServer:
             'voter_ids': list(self.votes.keys()) if hasattr(self, 'votes') else []
         }
         
-        print(f"DecisionServer: Returning tallied results with verification proof")
+        debug(f"DecisionServer: Returning tallied results with verification proof")
         
         return results
     
@@ -499,7 +506,7 @@ class DecisionServer:
         if not hasattr(self, '_encrypted_tally'):
             raise ValueError("No encrypted tally available. Call tally_vote() first.")
         
-        print(f"DecisionServer: Starting decryption process with {len(voter_ids_for_decryption)} voters")
+        debug(f"DecisionServer: Starting decryption process with {len(voter_ids_for_decryption)} voters")
         
         results = self.get_tallied_results()
         
@@ -507,7 +514,7 @@ class DecisionServer:
         partial_decryptions = []
         voter_lookup = {v.voter_id: v for v in voters}
         
-        print(f"DecisionServer: Requesting partial decryptions from voters...")
+        debug(f"DecisionServer: Requesting partial decryptions from voters...")
         for voter_id in voter_ids_for_decryption:
             if voter_id not in voter_lookup:
                 raise ValueError(f"Voter {voter_id} not found in voter list")
@@ -524,14 +531,14 @@ class DecisionServer:
                 raise ValueError(f"Invalid partial decryption proof from voter {voter_id}")
                 
             partial_decryptions.append(partial_decryption)
-            print(f"  ✓ Received and verified partial decryption from voter {voter_id}")
+            debug(f"  ✓ Received and verified partial decryption from voter {voter_id}")
 
         # Step 2: Combine partial decryptions using Shamir's secret reconstruction
-        print(f"DecisionServer: Combining {len(partial_decryptions)} partial decryptions...")
+        debug(f"DecisionServer: Combining {len(partial_decryptions)} partial decryptions...")
         plaintext_total = self._reconstruct_vote_from_shares(partial_decryptions)
-        
-        print(f"DecisionServer: Decryption complete. Total votes: {plaintext_total}")
-        
+
+        debug(f"DecisionServer: Decryption complete. Total votes: {plaintext_total}")
+
         return plaintext_total
      
     def _reconstruct_vote_from_shares(self, partial_decryptions: List) -> int:
@@ -548,7 +555,7 @@ class DecisionServer:
         Returns:
             int: The reconstructed vote total
         """
-        print(f"DecisionServer: Reconstructing vote total using BGV threshold decryption")
+        debug(f"DecisionServer: Reconstructing vote total using BGV threshold decryption")
         
         # Extract the encrypted tally ciphertext
         if not hasattr(self, '_encrypted_tally'):
@@ -579,15 +586,15 @@ class DecisionServer:
             partial_value = partial_decrypt_data['partial_value']
             
             partial_results.append((share_index, partial_value))
-            print(f"  Voter {partial['voter_id']}: Partial decryption ({share_index}, <partial_value>)")
-        
+            debug(f"  Voter {partial['voter_id']}: Partial decryption ({share_index}, {partial_value})")
+
         # Use BGV threshold decryption with partial results
         plaintext_total = self.crypto_system.combine_shares_and_decrypt(
             total_ciphertext, partial_results
         )
         
-        print(f"DecisionServer: BGV threshold decryption complete: {plaintext_total}")
-        print(f"DecisionServer: SECRET SHARES NEVER REVEALED - only partial decryptions used")
+        debug(f"DecisionServer: BGV threshold decryption complete: {plaintext_total}")
+        debug(f"DecisionServer: SECRET SHARES NEVER REVEALED - only partial decryptions used")
         
         return plaintext_total
     
@@ -610,27 +617,27 @@ class DecisionServer:
         try:
             # Extract the proof from the partial decryption result
             if 'decryption_proof' not in partial_decryption:
-                print(f"DecisionServer: No decryption proof found in partial decryption from voter {partial_decryption.get('voter_id', 'unknown')}")
+                debug(f"DecisionServer: No decryption proof found in partial decryption from voter {partial_decryption.get('voter_id', 'unknown')}")
                 return False
             
             zkp_proof = partial_decryption['decryption_proof']
             partial_result = partial_decryption['partial_decryption']
             voter_id = partial_decryption['voter_id']
             
-            print(f"DecisionServer: Verifying partial decryption ZKP from voter {voter_id}")
+            debug(f"DecisionServer: Verifying partial decryption ZKP from voter {voter_id}")
             
             # Verify the zero-knowledge proof using the standalone verification function
             is_valid = verify_partial_decryption_zkp_from_json(zkp_proof, encrypted_tally, partial_result)
             
             if is_valid:
-                print(f"DecisionServer: Partial decryption ZKP verification PASSED for voter {voter_id}")
+                debug(f"DecisionServer: Partial decryption ZKP verification PASSED for voter {voter_id}")
             else:
-                print(f"DecisionServer: Partial decryption ZKP verification FAILED for voter {voter_id}")
+                debug(f"DecisionServer: Partial decryption ZKP verification FAILED for voter {voter_id}")
             
             return is_valid
             
         except Exception as e:
-            print(f"DecisionServer: Error verifying partial decryption proof: {e}")
+            debug(f"DecisionServer: Error verifying partial decryption proof: {e}")
             return False
     
     def can_tally(self) -> bool:

@@ -29,22 +29,13 @@ def main():
         for i in range(server.number_voters):
             voter = Voter(server, voter_id=i)
             voters.append(voter)
-            print(f"Created: {voter}")
-        
+
+        print(f"\nCreated {len(voters)} voters") 
+
         # Create and distribute secret key using Shamir's scheme
         print(f"\nCreating and distributing secret key...")
-        secret_key = server.create_and_distribute_key(voters)
+        server.create_and_distribute_key(voters)
         print(f"Secret key created and distributed to all voters")
-        
-        # Verify all voters received their shares and public key
-        print(f"\nVerifying key share and public key distribution:")
-        for voter in voters:
-            if voter.has_key_share() and voter.has_shared_public_key():
-                share = voter.get_key_share()
-                public_key = voter.get_shared_public_key()
-                print(f"Voter {voter.voter_id}: Has share ({share[0]}, {str(share[1])[:10]}...) and public key: {public_key[:20]}...")
-            else:
-                print(f"Voter {voter.voter_id}: Missing share or public key")
         
         # Demonstrate voting process
         print(f"\nStarting voting process...")
@@ -119,7 +110,6 @@ def main():
         
         print(f"\nSimulation complete!")
         print(f"Server has {server.number_voters} voters with quorum of {server.quorum}")
-        print(f"Secret key length: {len(secret_key)} bytes")
         print(f"Can tally: {'Yes' if server.can_tally() else 'No'}")
         
     except (ValueError, TypeError) as e:

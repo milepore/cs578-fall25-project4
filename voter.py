@@ -11,6 +11,11 @@ from bgv_threshold_crypto import BGVThresholdCrypto, BGVCiphertext
 # Import the Schnorr-based zero-knowledge proof system
 from schnorr_zkp import SchnorrDisjunctiveProof, verify_zkp_from_json, SchnorrPartialDecryptionProof
 
+debug_on=False
+
+def debug(msg):
+    if (debug_on):
+        print(msg)
 
 class Voter:
     """
@@ -60,7 +65,7 @@ class Voter:
         """
         self.key_share = share
         self.shared_public_key = public_key
-        print(f"Voter {self.voter_id} received key share: ({share[0]}, {str(share[1])[:10]}...) and public key: {public_key[:20]}...")
+        debug(f"Voter {self.voter_id} received key share: ({share[0]}, {str(share[1])[:10]}...) and public key: {public_key[:20]}...")
     
     def get_key_share(self):
         """
@@ -112,7 +117,7 @@ class Voter:
         signature_bytes = self.private_key_obj.sign(challenge)
         signature_hex = signature_bytes.hex()
         
-        print(f"Voter {self.voter_id} signed challenge with Ed25519")
+        debug(f"Voter {self.voter_id} signed challenge with Ed25519")
         return signature_hex
     
     def castVote(self, vote: int) -> bool:
@@ -135,17 +140,17 @@ class Voter:
         if not self.has_shared_public_key():
             raise ValueError("Cannot cast vote: shared public key not available")
         
-        print(f"Voter {self.voter_id} casting vote: {vote}")
+        debug(f"Voter {self.voter_id} casting vote: {vote}")
         
         # Step 1: Encrypt the vote using the shared public key
         if not isinstance(self.shared_public_key, bytes):
             raise ValueError("Public key must be bytes for BGV encryption")
         encrypted_vote = self._encrypt_vote(vote, self.shared_public_key)
-        print(f"Voter {self.voter_id} encrypted vote: {encrypted_vote[:20]}...")
+        debug(f"Voter {self.voter_id} encrypted vote: {encrypted_vote[:20]}...")
         
         # Step 2: Create a zero-knowledge proof that the vote is 0 or 1
         zkp = self._create_vote_zkp(vote, encrypted_vote)
-        print(f"Voter {self.voter_id} created ZKP: {zkp[:30]}...")
+        debug(f"Voter {self.voter_id} created ZKP: {zkp[:30]}...")
         
         # Step 3: Create message to sign (vote data + voter identity)
         vote_message = f"{encrypted_vote}|{zkp}|{self.voter_id}"
@@ -161,14 +166,14 @@ class Voter:
             )
             
             if result:
-                print(f"Voter {self.voter_id} successfully cast vote")
+                debug(f"Voter {self.voter_id} successfully cast vote")
             else:
-                print(f"Voter {self.voter_id} failed to cast vote")
-            
+                debug(f"Voter {self.voter_id} failed to cast vote")
+
             return result
             
         except Exception as e:
-            print(f"Voter {self.voter_id} vote casting failed: {e}")
+            debug(f"Voter {self.voter_id} vote casting failed: {e}")
             return False
     
     def _encrypt_vote(self, vote: int, public_context: bytes) -> str:
@@ -204,13 +209,13 @@ class Voter:
             
             # Serialize to JSON
             encrypted_vote_json = json.dumps(bgv_ciphertext.to_dict())
-            
-            print(f"Voter {self.voter_id}: Encrypted vote using BGV/BFV")
-            
+
+            debug(f"Voter {self.voter_id}: Encrypted vote using BGV/BFV")
+
             return encrypted_vote_json
             
         except Exception as e:
-            print(f"Voter {self.voter_id}: BGV encryption failed: {e}")
+            debug(f"Voter {self.voter_id}: BGV encryption failed: {e}")
             raise e
     
     def _create_vote_zkp(self, vote: int, encrypted_vote: str) -> str:
@@ -240,36 +245,23 @@ class Voter:
         """
         if vote not in [0, 1]:
             raise ValueError("Vote must be 0 or 1")
+
+        debug(f"Voter {self.voter_id}: Creating Schnorr disjunctive ZKP for vote {vote}")
+
+        # Create the Schnorr disjunctive proof system
+        proof_system = SchnorrDisjunctiveProof()
         
-        print(f"Voter {self.voter_id}: Creating Schnorr disjunctive ZKP for vote {vote}")
+        # Generate the proof
+        proof_dict = proof_system.create_proof(vote, encrypted_vote, self.voter_id)
         
-        try:
-            # Create the Schnorr disjunctive proof system
-            proof_system = SchnorrDisjunctiveProof()
-            
-            # Generate the proof
-            proof_dict = proof_system.create_proof(vote, encrypted_vote, self.voter_id)
-            
-            # Serialize proof to JSON
-            zkp_json = json.dumps(proof_dict, sort_keys=True)
-            
-            print(f"Voter {self.voter_id}: Successfully created Schnorr ZKP")
-            print(f"Voter {self.voter_id}: Proof type: {proof_dict['type']}")
-            print(f"Voter {self.voter_id}: Challenge: {proof_dict['challenge'][:16]}...")
-            
-            return zkp_json
-            
-        except Exception as e:
-            print(f"Voter {self.voter_id}: ZKP creation failed: {e}")
-            # Fallback to a minimal proof structure for compatibility
-            fallback_proof = {
-                'type': 'schnorr_disjunctive_fallback',
-                'error': str(e),
-                'voter_id': self.voter_id,
-                'encrypted_vote_hash': hashlib.sha256(encrypted_vote.encode()).hexdigest()[:16],
-                'timestamp': 'fallback_proof'
-            }
-            return json.dumps(fallback_proof)
+        # Serialize proof to JSON
+        zkp_json = json.dumps(proof_dict, sort_keys=True)
+
+        debug(f"Voter {self.voter_id}: Successfully created Schnorr ZKP")
+        debug(f"Voter {self.voter_id}: Proof type: {proof_dict['type']}")
+        debug(f"Voter {self.voter_id}: Challenge: {proof_dict['challenge'][:16]}...")
+
+        return zkp_json
     
     def _sign_vote_message(self, message: str) -> str:
         """
@@ -312,7 +304,7 @@ class Voter:
         if self.shared_public_key is None:
             raise ValueError(f"Voter {self.voter_id} shared public key is None")
         
-        print(f"Voter {self.voter_id}: Computing partial decryption of tally")
+        debug(f"Voter {self.voter_id}: Computing partial decryption of tally")
         
         # Parse the BGV ciphertext from the encrypted tally
         try:
@@ -338,9 +330,9 @@ class Voter:
             'tally_hash': self._hash_tally(encrypted_tally),
             'decryption_proof': decryption_proof
         }
-        
-        print(f"Voter {self.voter_id}: Partial decryption complete (secret share kept private)")
-        
+
+        debug(f"Voter {self.voter_id}: Partial decryption complete (secret share kept private)")
+
         return partial_result
     
     def _hash_tally(self, encrypted_tally: str) -> str:
@@ -419,43 +411,29 @@ class Voter:
         """
         if self.key_share is None:
             raise ValueError("Cannot create partial decryption proof: key share not available")
+
+        debug(f"Voter {self.voter_id}: Creating Schnorr partial decryption ZKP")
+
+        # Create the Schnorr partial decryption proof system
+        proof_system = SchnorrPartialDecryptionProof()
         
-        print(f"Voter {self.voter_id}: Creating Schnorr partial decryption ZKP")
+        # Generate the proof using our secret share
+        proof_dict = proof_system.create_proof(
+            secret_share=self.key_share,
+            encrypted_tally=encrypted_tally,
+            partial_decryption_result=partial_decryption_result,
+            voter_id=self.voter_id
+        )
         
-        try:
-            # Create the Schnorr partial decryption proof system
-            proof_system = SchnorrPartialDecryptionProof()
-            
-            # Generate the proof using our secret share
-            proof_dict = proof_system.create_proof(
-                secret_share=self.key_share,
-                encrypted_tally=encrypted_tally,
-                partial_decryption_result=partial_decryption_result,
-                voter_id=self.voter_id
-            )
-            
-            # Serialize proof to JSON
-            zkp_json = json.dumps(proof_dict, sort_keys=True)
-            
-            print(f"Voter {self.voter_id}: Successfully created Schnorr partial decryption ZKP")
-            print(f"Voter {self.voter_id}: Proof type: {proof_dict['type']}")
-            print(f"Voter {self.voter_id}: Share index: {proof_dict['share_index']}")
-            print(f"Voter {self.voter_id}: Challenge: {proof_dict['challenge'][:16]}...")
-            
-            return zkp_json
-            
-        except Exception as e:
-            print(f"Voter {self.voter_id}: Partial decryption ZKP creation failed: {e}")
-            # Fallback to a minimal proof structure for compatibility
-            fallback_proof = {
-                'type': 'schnorr_partial_decryption_fallback',
-                'error': str(e),
-                'voter_id': self.voter_id,
-                'encrypted_tally_hash': hashlib.sha256(encrypted_tally.encode()).hexdigest()[:16],
-                'partial_result_hash': hashlib.sha256(str(partial_decryption_result).encode()).hexdigest()[:16],
-                'timestamp': 'fallback_proof'
-            }
-            return json.dumps(fallback_proof)
+        # Serialize proof to JSON
+        zkp_json = json.dumps(proof_dict, sort_keys=True)
+
+        debug(f"Voter {self.voter_id}: Successfully created Schnorr partial decryption ZKP")
+        debug(f"Voter {self.voter_id}: Proof type: {proof_dict['type']}")
+        debug(f"Voter {self.voter_id}: Share index: {proof_dict['share_index']}")
+        debug(f"Voter {self.voter_id}: Challenge: {proof_dict['challenge'][:16]}...")
+
+        return zkp_json
 
     def __repr__(self):
         return f"Voter(voter_id={self.voter_id}, decision_server={self.decision_server})"

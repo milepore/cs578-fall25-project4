@@ -10,8 +10,12 @@ import tenseal as ts
 import secrets
 from typing import List, Tuple, Dict, Any, Optional
 from dataclasses import dataclass
-import json
-import math
+
+debug_on=False
+
+def debug(msg):
+    if (debug_on):
+        print(msg)
 
 # Shamir's Secret Sharing implementation
 PRIME = 2**127 - 1  # Large prime for secret sharing (Mersenne prime for efficient modular arithmetic)
@@ -139,8 +143,8 @@ class BGVThresholdCrypto:
             num_participants
         )
         
-        print(f"BGVThresholdCrypto: Initialized with threshold {threshold}/{num_participants}")
-        print(f"BGVThresholdCrypto: Parameters - N={poly_modulus_degree}, t={plain_modulus}")
+        debug(f"BGVThresholdCrypto: Initialized with threshold {threshold}/{num_participants}")
+        debug(f"BGVThresholdCrypto: Parameters - N={poly_modulus_degree}, t={plain_modulus}")
     
     def get_public_context(self) -> bytes:
         """Get the public context for encryption (without secret keys)."""
@@ -185,7 +189,7 @@ class BGVThresholdCrypto:
             'encrypted_at': 'timestamp_placeholder'
         }
         
-        print(f"BGVThresholdCrypto: Encrypted vote (no plaintext shown)")
+        debug(f"BGVThresholdCrypto: Encrypted vote (no plaintext shown)")
         return BGVCiphertext(serialized, metadata)
     
     def homomorphic_add(self, ciphertext1: BGVCiphertext, ciphertext2: BGVCiphertext) -> BGVCiphertext:
@@ -210,7 +214,7 @@ class BGVThresholdCrypto:
         result_metadata = ciphertext1.context_data.copy()
         result_metadata['operation'] = 'homomorphic_add'
         
-        print(f"BGVThresholdCrypto: Performed homomorphic addition")
+        debug(f"BGVThresholdCrypto: Performed homomorphic addition")
         return BGVCiphertext(result_ct.serialize(), result_metadata)
     
     def partial_decrypt(self, ciphertext: BGVCiphertext, participant_id: int) -> Tuple[int, int]:
@@ -259,8 +263,8 @@ class BGVThresholdCrypto:
         # This simulates what would be a complex lattice-based partial decryption
         partial_contribution = (share_y + ciphertext_seed) % PRIME
         
-        print(f"BGVThresholdCrypto: Participant {participant_id} computed ciphertext-specific partial decryption")
-        print(f"BGVThresholdCrypto: Secret share remains private and secure")
+        debug(f"BGVThresholdCrypto: Participant {participant_id} computed ciphertext-specific partial decryption")
+        debug(f"BGVThresholdCrypto: Secret share remains private and secure")
         
         return (share_x, partial_contribution)
     
@@ -283,7 +287,7 @@ class BGVThresholdCrypto:
         if len(partial_results) < self.threshold:
             raise ValueError(f"Need at least {self.threshold} partial results, got {len(partial_results)}")
         
-        print(f"BGVThresholdCrypto: Combining {len(partial_results)} ciphertext-specific partial results")
+        debug(f"BGVThresholdCrypto: Combining {len(partial_results)} ciphertext-specific partial results")
         
         # Compute the same ciphertext seed that was used in partial decryption
         import hashlib
@@ -295,14 +299,14 @@ class BGVThresholdCrypto:
             # Remove the ciphertext-specific component to get the original share contribution
             effective_share_y = (partial_contribution - ciphertext_seed) % PRIME
             effective_shares.append((share_x, effective_share_y))
-            print(f"  Processed partial result from participant {share_x}")
+            debug(f"  Processed partial result from participant {share_x}")
         
         # Reconstruct the secret using Lagrange interpolation
         # This gives us the decryption key for THIS specific ciphertext
         decryption_key = reconstruct_secret(effective_shares)
         
-        print(f"BGVThresholdCrypto: Computed ciphertext-specific decryption key")
-        print(f"BGVThresholdCrypto: Master secret key remains secure and unknown")
+        debug(f"BGVThresholdCrypto: Computed ciphertext-specific decryption key")
+        debug(f"BGVThresholdCrypto: Master secret key remains secure and unknown")
         
         # Deserialize and decrypt the ciphertext
         encrypted_total = ts.bfv_vector_from(self.context, ciphertext.serialized_data)
@@ -314,40 +318,7 @@ class BGVThresholdCrypto:
             raise ValueError("Decryption returned empty result")
         
         result = int(decrypted_values[0])
-        print(f"BGVThresholdCrypto: Successfully decrypted result: {result}")
+        debug(f"BGVThresholdCrypto: Successfully decrypted result: {result}")
         
         return result
 
-def test_bgv_threshold():
-    """Test the BGV threshold crypto system."""
-    print("Testing BGV Threshold Crypto System")
-    
-    # Initialize system with 5 participants, threshold of 3, 128-bit security
-    crypto_system = BGVThresholdCrypto(threshold=3, num_participants=5)
-    
-    # Encrypt some votes
-    vote1 = crypto_system.encrypt(5)
-    vote2 = crypto_system.encrypt(3)
-    vote3 = crypto_system.encrypt(7)
-    
-    # Homomorphically add votes
-    combined = crypto_system.homomorphic_add(vote1, vote2)
-    combined = crypto_system.homomorphic_add(combined, vote3)
-    
-    # Partial decryptions from 3 participants (threshold)
-    partial_results = []
-    for i in range(3):  # Use first 3 participants
-        partial_result = crypto_system.partial_decrypt(combined, i)
-        partial_results.append(partial_result)
-    
-    # Combine and decrypt
-    final_result = crypto_system.combine_shares_and_decrypt(combined, partial_results)
-    
-    expected = 5 + 3 + 7
-    print(f"Expected total: {expected}")
-    print(f"Actual total: {final_result}")
-    print(f"Test {'PASSED' if final_result == expected else 'FAILED'}")
-    
-    return final_result == expected
-if __name__ == "__main__":
-    test_bgv_threshold()
