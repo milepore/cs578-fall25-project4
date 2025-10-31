@@ -5,16 +5,21 @@ Simulation script for the DecisionServer and Voter classes.
 
 from decision_server import DecisionServer
 from voter import Voter
+import random
+
 
 
 def main():
     """
     Main function to run the decision-making simulation.
+    Creates a voting server, and the right number of voters,
+    distributes keys, casts votes, tallies the encrypted results,
+    and decrypts the results using only a quorum of voters.
     """
     print("Decision Server Simulation")
     print("=" * 30)
     
-    # Create a DecisionServer with 5 voters and a quorum of 3
+    # Create a DecisionServer with 50 voters and a quorum of 35
     try:
         server = DecisionServer(number_voters=50, quorum=35)
         print(f"Created: {server}")
@@ -46,7 +51,6 @@ def main():
         print(f"Quorum required: {server.quorum} votes")
         
         # create votes_to_cast as a list of length equal to number_voters with random 0/1 votes
-        import random
         votes_to_cast = [random.randint(0, 1) for _ in range(server.number_voters)]
         
         for i, vote_value in enumerate(votes_to_cast):
