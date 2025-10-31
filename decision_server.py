@@ -241,7 +241,7 @@ class DecisionServer:
             return False
         
         # Step 3: Verify zero-knowledge proof
-        if not self._verify_vote_zkp(encrypted_vote, zkp, voter_id):
+        if not verify_zkp_from_json(zkp, encrypted_vote):
             print(f"DecisionServer: Vote rejected - invalid ZKP from voter {voter_id}")
             return False
         
@@ -284,20 +284,7 @@ class DecisionServer:
         # Verify using Ed25519
         message_bytes = message.encode()
         return self._verify_signature(message_bytes, signature, public_key_hex)
-    
-    def _verify_vote_zkp(self, encrypted_vote: str, zkp: str, voter_id: int) -> bool:
-        """
-        Verify the zero-knowledge proof for a vote (stub implementation).
-        Args:
-            encrypted_vote: The encrypted vote
-            zkp: The zero-knowledge proof
-            voter_id: The voter's ID
-            
-        Returns:
-            bool: True if ZKP is valid, False otherwise
-        """
-        return verify_zkp_from_json(zkp, encrypted_vote)
-    
+        
     def get_vote_count(self) -> int:
         """
         Get the current number of votes cast.
@@ -345,16 +332,10 @@ class DecisionServer:
         # Perform homomorphic addition
         total_ciphertext = self._homomorphic_add_votes(encrypted_votes)
         
-        # Generate verification proof for the homomorphic computation
-        verification_proof = self._generate_tally_verification_proof(encrypted_votes, total_ciphertext)
-        
         # Store results for later retrieval
         self._encrypted_tally = total_ciphertext
-        self._verification_proof = verification_proof
         
-        print(f"DecisionServer: Tally complete. Total ciphertext: {total_ciphertext[:30]}...")
-        print(f"DecisionServer: Verification proof generated: {verification_proof[:40]}...")
-        
+        print(f"DecisionServer: Tally complete. Total ciphertext: {total_ciphertext[:30]}...")        
         return total_ciphertext
     
     def _homomorphic_add_votes(self, encrypted_votes: List[str]) -> str:
@@ -422,72 +403,6 @@ class DecisionServer:
         
         return self._encrypted_tally
     
-    def _generate_tally_verification_proof(self, encrypted_votes: List[str], total_ciphertext: str) -> str:
-        """
-        Generate a Non-Interactive Zero-Knowledge Proof verifying the correctness of homomorphic tallying.
-        
-        This NIZK proof demonstrates that:
-        1. The total_ciphertext is the correct homomorphic sum of all encrypted_votes
-        2. No votes were added, removed, or modified during tallying
-        3. The homomorphic operations were performed correctly
-        
-        In a real implementation, this would use techniques like:
-        - Bulletproofs for range proofs and arithmetic circuits
-        - PLONK/STARK for general computation verification
-        - Groth16 for succinct proofs
-        - Custom sigma protocols for homomorphic operation verification
-        
-        Args:
-            encrypted_votes: List of individual encrypted votes
-            total_ciphertext: The computed homomorphic sum
-            
-        Returns:
-            str: The verification proof
-        """
-        import hashlib
-        import secrets
-        
-        print(f"DecisionServer: Generating verification proof for {len(encrypted_votes)} votes")
-        
-        # Step 1: Create commitment to all input votes
-        votes_commitment = self._create_votes_commitment(encrypted_votes)
-        
-        # Step 2: Create witness for the homomorphic computation
-        computation_witness = self._create_computation_witness(encrypted_votes, total_ciphertext)
-        
-        # Step 3: Generate Fiat-Shamir challenge
-        challenge_input = f"{votes_commitment}|{total_ciphertext}|{computation_witness}|tally_proof"
-        challenge_hash = hashlib.sha256(challenge_input.encode()).hexdigest()
-        challenge = challenge_hash[:32]  # Use first 32 chars as challenge
-        
-        # Step 4: Generate proof response
-        proof_response = secrets.token_hex(64)  # In real implementation, computed from witness
-        
-        # Step 5: Create verification metadata
-        proof_metadata = {
-            'num_votes': len(encrypted_votes),
-            'quorum': self.quorum,
-            'votes_hash': hashlib.sha256('|'.join(encrypted_votes).encode()).hexdigest()[:16],
-            'total_hash': hashlib.sha256(total_ciphertext.encode()).hexdigest()[:16]
-        }
-        
-        # Construct the complete proof
-        verification_proof = (
-            f"tally_verification_proof|"
-            f"commitment:{votes_commitment}|"
-            f"witness:{computation_witness}|"
-            f"challenge:{challenge}|"
-            f"response:{proof_response}|"
-            f"metadata:{proof_metadata['num_votes']}_{proof_metadata['quorum']}_{proof_metadata['votes_hash']}_{proof_metadata['total_hash']}"
-        )
-        
-        print(f"DecisionServer: Verification proof components generated")
-        print(f"  - Votes commitment: {votes_commitment[:20]}...")
-        print(f"  - Challenge: {challenge[:16]}...")
-        print(f"  - Response: {proof_response[:20]}...")
-        
-        return verification_proof
-    
     def _create_votes_commitment(self, encrypted_votes: List[str]) -> str:
         """
         Create a cryptographic commitment to all input votes.
@@ -538,12 +453,11 @@ class DecisionServer:
         Raises:
             ValueError: If tally has not been computed yet
         """
-        if not hasattr(self, '_encrypted_tally') or not hasattr(self, '_verification_proof'):
+        if not hasattr(self, '_encrypted_tally'):
             raise ValueError("Tally has not been computed yet. Call tally_vote() first.")
         
         results = {
             'total_ciphertext': self._encrypted_tally,
-            'verification_proof': self._verification_proof,
             'num_votes': len(self.votes) if hasattr(self, 'votes') else 0,
             'quorum': self.quorum,
             'timestamp': self._get_timestamp(),
@@ -553,42 +467,6 @@ class DecisionServer:
         print(f"DecisionServer: Returning tallied results with verification proof")
         
         return results
-    
-    def verify_tally_proof(self, results: dict) -> bool:
-        """
-        Verify the tallying verification proof (stub implementation).
-        
-        In a real implementation, this would:
-        1. Parse the proof components
-        2. Recompute commitments and challenges
-        3. Verify the proof response
-        4. Check proof validity against public parameters
-        
-        Args:
-            results: Results dictionary containing proof
-            
-        Returns:
-            bool: True if proof is valid, False otherwise
-        """
-        try:
-            proof = results['verification_proof']
-            
-            # Basic format validation
-            if not proof.startswith('tally_verification_proof|'):
-                return False
-            
-            # Check required components
-            required_components = ['commitment:', 'witness:', 'challenge:', 'response:', 'metadata:']
-            for component in required_components:
-                if component not in proof:
-                    return False
-            
-            print(f"DecisionServer: Tally verification proof is valid (stub verification)")
-            return True
-            
-        except Exception as e:
-            print(f"DecisionServer: Proof verification failed: {e}")
-            return False
     
     def _get_timestamp(self) -> str:
         """Get current timestamp for results."""
@@ -618,7 +496,7 @@ class DecisionServer:
         if len(voter_ids_for_decryption) < self.quorum:
             raise ValueError(f"Need at least {self.quorum} voters for decryption, got {len(voter_ids_for_decryption)}")
         
-        if not hasattr(self, '_encrypted_tally') or not hasattr(self, '_verification_proof'):
+        if not hasattr(self, '_encrypted_tally'):
             raise ValueError("No encrypted tally available. Call tally_vote() first.")
         
         print(f"DecisionServer: Starting decryption process with {len(voter_ids_for_decryption)} voters")
