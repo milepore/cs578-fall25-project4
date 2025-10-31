@@ -6,6 +6,7 @@ import hashlib
 
 # Import our BGV-based threshold crypto system
 from bgv_threshold_crypto import BGVThresholdCrypto, BGVCiphertext
+from schnorr_zkp import verify_zkp_from_json
 
 class DecisionServer:
     """
@@ -287,12 +288,6 @@ class DecisionServer:
     def _verify_vote_zkp(self, encrypted_vote: str, zkp: str, voter_id: int) -> bool:
         """
         Verify the zero-knowledge proof for a vote (stub implementation).
-        
-        In a real implementation, this would:
-        1. Parse the ZKP components (challenge, response, commitments)
-        2. Verify the proof using the public parameters
-        3. Ensure the proof demonstrates knowledge of plaintext ∈ {0,1}
-        
         Args:
             encrypted_vote: The encrypted vote
             zkp: The zero-knowledge proof
@@ -301,22 +296,7 @@ class DecisionServer:
         Returns:
             bool: True if ZKP is valid, False otherwise
         """
-        # Stub implementation - basic format validation
-        # In practice, this would be proper cryptographic verification
-        
-        if not zkp.startswith("zkp_proof|"):
-            print(f"DecisionServer: Invalid ZKP format from voter {voter_id}")
-            return False
-        
-        # Check if ZKP contains required components
-        required_components = ["challenge:", "response:", "vote_range:0-1"]
-        for component in required_components:
-            if component not in zkp:
-                print(f"DecisionServer: Missing ZKP component '{component}' from voter {voter_id}")
-                return False
-        
-        print(f"DecisionServer: ZKP verification passed for voter {voter_id}")
-        return True
+        return verify_zkp_from_json(zkp, encrypted_vote)
     
     def get_vote_count(self) -> int:
         """
