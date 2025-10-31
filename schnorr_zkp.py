@@ -18,23 +18,15 @@ import secrets
 from typing import Dict, Any
 
 
-class SchnorrDisjunctiveProof:
+class SchnorrProofBase:
     """
-    Implementation of Schnorr-based disjunctive zero-knowledge proof for vote validity.
+    Base class for Schnorr-based zero-knowledge proofs.
     
-    This proves that an encrypted vote contains either 0 or 1 without revealing which one.
-    Uses elliptic curve cryptography with secp256r1 curve and Fiat-Shamir heuristic
-    for non-interactivity.
+    Provides common elliptic curve operations, utilities, and setup
+    shared by all Schnorr proof implementations.
     
-    The proof demonstrates: "I know a secret vote v such that v ∈ {0, 1} and 
-    the encrypted vote corresponds to v" without revealing whether v = 0 or v = 1.
-    
-    Security Properties:
-    - Zero-Knowledge: Reveals nothing about the actual vote value
-    - Soundness: Invalid proofs cannot be created (computationally infeasible)
-    - Completeness: Valid proofs always verify correctly
-    - Non-Interactive: No interaction required between prover and verifier
-    - Binding: Proof is tied to specific encrypted vote (prevents replay attacks)
+    Uses elliptic curve cryptography with secp256r1 curve and provides
+    standard operations for proof construction and verification.
     """
     
     def __init__(self):
@@ -73,6 +65,26 @@ class SchnorrDisjunctiveProof:
         digest.update(data)
         hash_bytes = digest.finalize()
         return int.from_bytes(hash_bytes, 'big') % self.q
+
+
+class SchnorrDisjunctiveProof(SchnorrProofBase):
+    """
+    Implementation of Schnorr-based disjunctive zero-knowledge proof for vote validity.
+    
+    This proves that an encrypted vote contains either 0 or 1 without revealing which one.
+    Uses elliptic curve cryptography with secp256r1 curve and Fiat-Shamir heuristic
+    for non-interactivity.
+    
+    The proof demonstrates: "I know a secret vote v such that v ∈ {0, 1} and 
+    the encrypted vote corresponds to v" without revealing whether v = 0 or v = 1.
+    
+    Security Properties:
+    - Zero-Knowledge: Reveals nothing about the actual vote value
+    - Soundness: Invalid proofs cannot be created (computationally infeasible)
+    - Completeness: Valid proofs always verify correctly
+    - Non-Interactive: No interaction required between prover and verifier
+    - Binding: Proof is tied to specific encrypted vote (prevents replay attacks)
+    """
     
     def create_proof(self, vote: int, encrypted_vote: str, voter_id: int) -> Dict[str, Any]:
         """
@@ -313,7 +325,7 @@ def verify_zkp_from_json(zkp_json: str, encrypted_vote: str) -> bool:
         return False
 
 
-class SchnorrPartialDecryptionProof:
+class SchnorrPartialDecryptionProof(SchnorrProofBase):
     """
     Implementation of Schnorr-based zero-knowledge proof for partial decryption correctness.
     
@@ -329,41 +341,6 @@ class SchnorrPartialDecryptionProof:
     - Non-Interactive: No interaction required between prover and verifier
     - Binding: Proof is tied to specific encrypted tally and partial decryption result
     """
-    
-    def __init__(self):
-        """Initialize with secp256r1 elliptic curve."""
-        self.curve = ec.SECP256R1()
-        # Generator point G for the elliptic curve
-        self.G = self._get_generator_point()
-        # Field order (large prime for secp256r1)
-        self.q = 0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551
-    
-    def _get_generator_point(self) -> ec.EllipticCurvePublicKey:
-        """Get the standard generator point for secp256r1."""
-        # Create a temporary private key to access the generator
-        temp_private = ec.generate_private_key(self.curve)
-        return temp_private.public_key()
-    
-    def _point_to_bytes(self, point: ec.EllipticCurvePublicKey) -> bytes:
-        """Convert elliptic curve point to bytes."""
-        return point.public_bytes(
-            encoding=serialization.Encoding.X962,
-            format=serialization.PublicFormat.UncompressedPoint
-        )
-    
-    def _scalar_mult(self, scalar: int, point: ec.EllipticCurvePublicKey) -> ec.EllipticCurvePublicKey:
-        """Multiply elliptic curve point by scalar (simulate scalar multiplication)."""
-        # In a real implementation, we'd use proper EC scalar multiplication
-        # For this proof-of-concept, we'll use a hash-based approach for simplicity
-        private_key = ec.derive_private_key(scalar % self.q, self.curve)
-        return private_key.public_key()
-    
-    def _hash_to_scalar(self, data: bytes) -> int:
-        """Hash data to a scalar in the field."""
-        digest = hashes.Hash(hashes.SHA256())
-        digest.update(data)
-        hash_bytes = digest.finalize()
-        return int.from_bytes(hash_bytes, 'big') % self.q
     
     def create_proof(self, secret_share: tuple, encrypted_tally: str, 
                     partial_decryption_result: dict, voter_id: int) -> Dict[str, Any]:
