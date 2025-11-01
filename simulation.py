@@ -4,6 +4,7 @@ Simulation script for the DecisionServer and Voter classes.
 """
 
 from decision_server import DecisionServer
+from key_generation_authority import KeyGenerationAuthority
 from voter import Voter
 import random
 
@@ -33,8 +34,9 @@ def main():
         print(f"\nCreated {len(voters)} voters") 
 
         # Create and distribute secret key using Shamir's scheme
-        print(f"\nCreating and distributing secret key...")
-        server.create_and_distribute_key(voters)
+        print(f"\nAsking Trusted Key Generation authority to create and distribute secret key...")
+        key_gen_authority = KeyGenerationAuthority(server)
+        secret_key = key_gen_authority.generate_and_distribute_key(voters)
         print(f"Secret key created and distributed to all voters")
         
         # Demonstrate voting process
@@ -48,7 +50,7 @@ def main():
             if i < len(voters):
                 voter = voters[i]
                 try:
-                    success = voter.castVote(vote_value)
+                    success = voter.cast_vote(vote_value)
                     if success:
                         print(f"✓ Voter {voter.voter_id} successfully voted")
                     else:

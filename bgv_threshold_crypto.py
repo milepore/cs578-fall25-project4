@@ -116,6 +116,11 @@ class BGVThresholdCrypto:
             threshold: Minimum number of participants needed for decryption
             num_participants: Total number of participants
         """
+        if threshold > num_participants:
+            raise ValueError("Threshold cannot be greater than number of participants")
+        if threshold <= 0 or num_participants <= 0:
+            raise ValueError("Threshold and num_participants must be positive")
+            
         self.threshold = threshold
         self.num_participants = num_participants
         
@@ -134,17 +139,11 @@ class BGVThresholdCrypto:
         self.poly_modulus_degree = poly_modulus_degree
         self.plain_modulus = plain_modulus
         
-        # Generate master secret key using cryptographically secure random bits
-        # Use 127 bits to match the size of PRIME (2^127 - 1)
-        self.master_secret = secrets.randbits(127) % PRIME
-        self.secret_shares = create_shares(
-            self.master_secret, 
-            threshold, 
-            num_participants
-        )
-        
+        # SECURITY: Master secret and shares are now managed by KeyGenerationAuthority
+        # This class only handles public operations (encryption, homomorphic operations)
         debug(f"BGVThresholdCrypto: Initialized with threshold {threshold}/{num_participants}")
         debug(f"BGVThresholdCrypto: Parameters - N={poly_modulus_degree}, t={plain_modulus}")
+        debug("🔒 BGVThresholdCrypto: No secret material stored - secure from individual vote decryption")
     
     def get_public_context(self) -> bytes:
         """Get the public context for encryption (without secret keys)."""
@@ -152,11 +151,9 @@ class BGVThresholdCrypto:
         public_context.make_context_public()
         return public_context.serialize()
     
-    def get_secret_share(self, participant_id: int) -> Tuple[int, int]:
-        """Get secret share for a specific participant."""
-        if participant_id < 0 or participant_id >= self.num_participants:
-            raise ValueError(f"Invalid participant ID: {participant_id}")
-        return self.secret_shares[participant_id]
+    # SECURITY NOTE: get_secret_share() method removed
+    # Secret shares are now managed exclusively by KeyGenerationAuthority
+    # This prevents DecisionServer from accessing secret material
     
     def encrypt(self, vote: int, context_data: bytes | None = None) -> BGVCiphertext:
         """
@@ -217,15 +214,15 @@ class BGVThresholdCrypto:
         debug(f"BGVThresholdCrypto: Performed homomorphic addition")
         return BGVCiphertext(result_ct.serialize(), result_metadata)
     
-    def partial_decrypt(self, ciphertext: BGVCiphertext, participant_id: int) -> Tuple[int, int]:
+    def partial_decrypt(self, ciphertext: BGVCiphertext, participant_id: int, secret_share: Tuple[int, int]) -> Tuple[int, int]:
         """
         Perform partial decryption using participant's secret share.
         
         SECURITY: This method performs a proper partial decryption where:
-        1. The participant uses their secret share with the specific ciphertext
+        1. The participant provides their secret share for this specific operation
         2. Only a partial decryption result is returned (NOT the secret share)
         3. Multiple partial decryptions can be combined to get the plaintext
-        4. The secret share itself is never revealed
+        4. The secret share itself is never revealed or stored in this class
         
         In real BGV threshold decryption, this would involve:
         - Computing decryption shares using lattice operations
@@ -235,12 +232,13 @@ class BGVThresholdCrypto:
         Args:
             ciphertext: The ciphertext to partially decrypt
             participant_id: ID of the participant performing partial decryption
+            secret_share: The participant's secret share as (x, y) tuple
             
         Returns:
             Tuple of (participant_index, ciphertext_specific_partial_decryption)
         """
-        # Get the participant's secret share
-        share_x, share_y = self.get_secret_share(participant_id)
+        # Use the provided secret share (not stored in this class for security)
+        share_x, share_y = secret_share
         
         # PROPER PARTIAL DECRYPTION APPROACH:
         # Instead of revealing the secret share, we compute a partial decryption

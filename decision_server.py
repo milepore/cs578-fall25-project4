@@ -1,7 +1,6 @@
-import secrets
-from typing import List, Tuple
-from cryptography.hazmat.primitives.asymmetric import ed25519
-from cryptography.exceptions import InvalidSignature
+from typing import List
+from ed25519_utils import generate_auth_challenge, verify_signature 
+
 import hashlib
 
 # Import our BGV-based threshold crypto system
@@ -91,137 +90,7 @@ class DecisionServer:
         """
         return self.registered_voters.get(voter_identity)
 
-    def create_and_distribute_key(self, voters: List) -> bytes:
-        """
-        Create a secret key using Shamir's secret sharing scheme and distribute 
-        shares to all registered voters after authentication challenge.
-        
-        Args:
-            voters: List of Voter objects to distribute key shares to
-            
-        Returns:
-            bytes: The original secret key
-            
-        Raises:
-            ValueError: If not enough voters are registered or provided
-            Exception: If authentication challenge fails for any voter
-        """
-        if len(voters) != self.number_voters:
-            raise ValueError(f"Expected {self.number_voters} voters, got {len(voters)}")
-        
-        if len(self.registered_voters) < self.number_voters:
-            raise ValueError("Not all voters are registered")
-        
-        # Step 1: Authenticate all voters using public key signature challenge
-        debug("Starting authentication challenge for all voters...")
-        for voter in voters:
-            if not self._authenticate_voter(voter):
-                raise Exception(f"Authentication failed for voter {voter.voter_id}")
-        debug("All voters authenticated successfully!")
-        
-        # Step 2: Get public context for BGV encryption
-        public_context = self.crypto_system.get_public_context()
-        self.bgv_public_context = public_context
-        
-        # Create a derived public key identifier for voters
-        public_key = f"bgv_threshold_pk_{hashlib.sha256(public_context).hexdigest()[:32]}"
-        debug(f"Generated BGV public context: {public_key[:20]}...")
-        
-        # Step 3: Distribute BGV secret shares and public context to authenticated voters
-        for i, voter in enumerate(voters):
-            secret_share = self.crypto_system.get_secret_share(i)
-            voter.receive_key_share_and_public_key(secret_share, public_context)
-
-        debug("DecisionServer: BGV threshold crypto keys generated and distributed")
-
-        return public_context
-        
-    def _authenticate_voter(self, voter) -> bool:
-        """
-        Authenticate a voter using public key signature challenge
-        
-        In a real implementation, this would:
-        1. Generate a random challenge message
-        2. Send challenge to voter
-        3. Voter signs challenge with their private key
-        4. Server verifies signature using voter's registered public key
-        
-        Args:
-            voter: The Voter object to authenticate
-            
-        Returns:
-            bool: True if authentication succeeds, False otherwise
-        """
-        # In practice, this would involve cryptographic signature verification
-        
-        # Check if voter is registered
-        if not self.is_voter_registered(voter.voter_id):
-            debug(f"Authentication failed: Voter {voter.voter_id} not registered")
-            return False
-        
-        # Generate challenge with security-level appropriate size
-        challenge = self._generate_auth_challenge()
-        debug(f"Sending authentication challenge to voter {voter.voter_id}")
-        
-        # Get voter's signature response
-        signature = voter.sign_challenge(challenge)
-        
-        # Verify signature using registered public key
-        registered_public_key = self.get_voter_public_key(voter.voter_id)
-        if registered_public_key is None:
-            debug(f"Authentication failed: No public key found for voter {voter.voter_id}")
-            return False
-        
-        is_valid = self._verify_signature(challenge, signature, registered_public_key)
-        
-        if is_valid:
-            debug(f"Voter {voter.voter_id} authentication successful")
-        else:
-            debug(f"Voter {voter.voter_id} authentication failed - invalid signature")
-
-        return is_valid
-    
-    def _generate_auth_challenge(self) -> bytes:
-        """
-        Generate authentication challenge with security-level appropriate size.
-        
-        Returns:
-            bytes: Random challenge bytes
-        """
-        # For 128-bit security, 16 bytes is 
-        challenge_bytes = 16  # At least 16 bytes
-        
-        return secrets.token_bytes(challenge_bytes)
-    
-    def _verify_signature(self, message: bytes, signature: str, public_key_hex: str) -> bool:
-        """
-        Verify an Ed25519 digital signature.
-        
-        Args:
-            message: The original message that was signed
-            signature: The signature to verify (hex string)
-            public_key_hex: The public key to use for verification (hex string)
-            
-        Returns:
-            bool: True if signature is valid, False otherwise
-        """
-        try:
-            # Convert hex strings back to bytes
-            signature_bytes = bytes.fromhex(signature)
-            public_key_bytes = bytes.fromhex(public_key_hex)
-            
-            # Reconstruct the Ed25519 public key
-            public_key = ed25519.Ed25519PublicKey.from_public_bytes(public_key_bytes)
-            
-            # Verify the signature
-            public_key.verify(signature_bytes, message)
-            return True
-
-        except Exception as e:
-            debug(f"DecisionServer: Signature verification error: {e}")
-            return False
-    
-    def castVote(self, encrypted_vote: str, zkp: str, voter_id: int, signature: str) -> bool:
+    def cast_vote(self, encrypted_vote: str, zkp: str, voter_id: int, signature: str) -> bool:
         """
         Accept and validate a vote from a registered voter.
         
@@ -290,7 +159,7 @@ class DecisionServer:
         
         # Verify using Ed25519
         message_bytes = message.encode()
-        return self._verify_signature(message_bytes, signature, public_key_hex)
+        return verify_signature(message_bytes, signature, public_key_hex)
         
     def get_vote_count(self) -> int:
         """

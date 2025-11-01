@@ -120,7 +120,7 @@ class Voter:
         debug(f"Voter {self.voter_id} signed challenge with Ed25519")
         return signature_hex
     
-    def castVote(self, vote: int) -> bool:
+    def cast_vote(self, vote: int) -> bool:
         """
         Cast a vote by encrypting it and creating a zero-knowledge proof.
         
@@ -158,7 +158,7 @@ class Voter:
         
         # Step 4: Send to DecisionServer
         try:
-            result = self.decision_server.castVote(
+            result = self.decision_server.cast_vote(
                 encrypted_vote=encrypted_vote,
                 zkp=zkp,
                 voter_id=self.voter_id,
@@ -370,9 +370,13 @@ class Voter:
             num_participants=self.decision_server.number_voters
         )
         
+        # Ensure we have a key share
+        if not hasattr(self, 'key_share') or self.key_share is None:
+            raise ValueError(f"Voter {self.voter_id} does not have a key share")
+        
         # Perform partial decryption using our secret share
         # This returns a partial decryption result, NOT the raw secret share
-        partial_x, partial_y = temp_crypto.partial_decrypt(bgv_ciphertext, self.voter_id)
+        partial_x, partial_y = temp_crypto.partial_decrypt(bgv_ciphertext, self.voter_id, self.key_share)
         
         # Return the partial decryption result (safe to share)
         return {

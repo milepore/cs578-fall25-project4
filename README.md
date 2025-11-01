@@ -41,8 +41,10 @@ The system implements a **threshold cryptographic voting scheme** with the follo
 
 1. **DecisionServer**: Central authority managing the voting process
 2. **Voters**: Individual participants with cryptographic identities
-3. **BGV/BFV Encryption**: Fully homomorphic encryption using TenSEAL library, integrating Shamir's Secret Sharing for key splitting and distribution
-4. **Schnorr ZKP Proofs**: ZKP implementation for vote verification and partial decryption verification
+3. **KeyGenerationAuthority**: A trusted authority that creates the BGV key, splits and distributes it across the voters
+4. **BGV/BFV Encryption**: Fully homomorphic encryption using TenSEAL library, integrating Shamir's Secret Sharing for key splitting and distribution
+5. **Schnorr ZKP Proofs**: ZKP implementation for vote verification and partial decryption verification
+6. **ED22219 Utils**: ED25519 cryptographic signing and verification utilities
 
 Each of these components is designed to provide 128 bit security levels.
 
@@ -55,16 +57,16 @@ Each of these components is designed to provide 128 bit security levels.
 
 #### **2. Threshold Cryptography Setup**
 - **BGV Context Generation**: Server generates BGV homomorphic encryption context using TenSEAL
-- **Shamir's Secret Sharing**: A master secret is split into `n` shares using Shamir's scheme
+- **Shamir's Secret Sharing**: A master secret is split into `n` shares using Shamir's scheme by a trusted authority
 - **Quorum Requirement**: Only `k` out of `n` voters are needed for decryption (configurable quorum)
 - **Key Distribution**: Each authenticated voter receives their secret share and the public BGV context
 
 #### **3. Secure Voting Process**
 ```python
-def castVote(self, encrypted_vote: str, zkp: str, voter_id: int, signature: str) -> bool
+def cast_vote(self, encrypted_vote: str, zkp: str, voter_id: int, signature: str) -> bool
 ```
 - **Vote Encryption**: Voters encrypt their binary votes (0 or 1) using BGV/BFV homomorphic encryption
-- **Complete Privacy**: Vote contents are fully hidden within BGV ciphertext structure - no plaintext leakage
+- **Complete Privacy**: Vote contents are fully hidden within BGV ciphertext structure - no plaintext leakage, secret key is never known by anyone other than the trusted key authority
 - **Zero-Knowledge Proofs**: Each vote includes a ZKP proving the encrypted value is either 0 or 1
 - **Digital Signatures**: All vote submissions are digitally signed for authenticity
 - **Double-Voting Prevention**: Server prevents the same voter from voting multiple times
@@ -143,7 +145,7 @@ public_context = server.create_and_distribute_key(voters)
 
 # Voters cast encrypted votes using BGV
 for i, voter in enumerate(voters):
-    voter.castVote(vote_value)  # 0 or 1, encrypted with BGV/BFV
+    voter.cast_vote(vote_value)  # 0 or 1, encrypted with BGV/BFV
 
 # Homomorphic tallying (BGV addition)
 encrypted_total = server.tally_vote()
@@ -165,13 +167,9 @@ This design provides a robust, privacy-preserving voting system suitable for gro
 
 ## Potential Improvements
 
-### Separation of Decision Server from Voter Registration and Key Generation
+### Use of Distributed Key Generation Scheme
 
-Right now the central server not only gets the voter registrations, but also ships the partial keys to each voter.  This means that the central server COULD store that key and use it later.  However our implementation doesn't ever get the full key in the server.
-
-Ideally we would create a registry that registers all the voters (and their public keys) and distributes the shared key to them.  The decision server would collect the votes, but never have access to the key.
-
-In this case we can just say that the decision server discards the private key, but in production, we might want to separate the concerns.
+We could change the way the key is generated to use a DKG scheme.  This would ask each of the votes to generate a piece of the secret, and we could create a public key through the DKG protocol.  This would be even more secure than asking a trusted authority to create and distribute the key (and forget it after).
 
 ### Secret Sharing Protocol Improvements
 
