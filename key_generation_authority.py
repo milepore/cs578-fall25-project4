@@ -86,7 +86,7 @@ class KeyGenerationAuthority:
         # Step 4: Distribute BGV secret shares and public context to authenticated voters
         debug("KGA: Distributing secret shares to voters...")
         for i, voter in enumerate(voters):
-            secret_share = self.secret_shares[i]  # Get share from KGA, not DecisionServer
+            secret_share = self.secret_shares[i] 
             voter.receive_key_share_and_public_key(secret_share, public_context)
             debug(f"KGA: Distributed share to voter {voter.voter_id}")
 
@@ -101,8 +101,6 @@ class KeyGenerationAuthority:
     def _authenticate_voter(self, voter) -> bool:
         """
         Authenticate a voter using public key signature challenge
-        
-        In a real implementation, this would:
         1. Generate a random challenge message
         2. Send challenge to voter
         3. Voter signs challenge with their private key
