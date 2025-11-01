@@ -70,7 +70,7 @@ from schnorr_zkp import SchnorrDisjunctiveProof, verify_zkp_from_json
 voter = Voter(decision_server, voter_id=1)
 
 # Cast vote with automatic ZKP generation
-result = voter.castVote(1)  # Creates real Schnorr ZKP
+result = voter.cast_vote(1)  # Creates real Schnorr ZKP
 
 # Verify ZKP using standalone function (recommended)
 is_valid = verify_zkp_from_json(zkp_json, encrypted_vote)
@@ -82,7 +82,7 @@ valid = zkp_system.verify_proof(proof, encrypted_vote)
 
 # DecisionServer usage example
 class DecisionServer:
-    def castVote(self, encrypted_vote, zkp, voter_id, signature):
+    def cast_vote(self, encrypted_vote, zkp, voter_id, signature):
         # Verify ZKP using standalone function
         if verify_zkp_from_json(zkp, encrypted_vote):
             # Accept vote
