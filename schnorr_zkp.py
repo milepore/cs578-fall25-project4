@@ -1,8 +1,12 @@
 """
-Schnorr-based Disjunctive Zero-Knowledge Proof Implementation
+Schnorr-based  Zero-Knowledge Proof Implementation
 
 This module provides a cryptographically sound zero-knowledge proof system
-for proving that a secret value is either 0 or 1 without revealing which one.
+Supports two types of proofs:
+* Disjunctive Proofs for vote validity (0 or 1) for proving that a secret
+  value is either 0 or 1 without revealing which one.
+* Partial decryption proof - to prove that the partial decryption was computed
+  correctly using the voter's secret share without revealing the secret share itself.
 
 Uses elliptic curve cryptography with secp256r1 curve and the Fiat-Shamir
 heuristic for non-interactivity.
