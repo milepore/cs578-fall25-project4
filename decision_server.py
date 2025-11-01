@@ -90,6 +90,14 @@ class DecisionServer:
         """
         return self.registered_voters.get(voter_identity)
 
+    def publish_voting_data(self):
+            """Publish data needed for tally verification."""
+            return {
+                'all_encrypted_votes': list(self.votes.values()),
+                'encrypted_tally': self.get_encrypted_tally(),
+                'bgv_parameters': self.crypto_system.get_public_context(),
+            }
+
     def cast_vote(self, encrypted_vote: str, zkp: str, voter_id: int, signature: str) -> bool:
         """
         Accept and validate a vote from a registered voter.

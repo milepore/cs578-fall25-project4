@@ -1,6 +1,3 @@
-## Code left todo
-
-* Create NIZKP implementation for partial decription per voter
 
 ## Quick Start
 
@@ -78,8 +75,7 @@ def tally_vote(self) -> str
 - **Homomorphic Addition**: Uses BGV's additive homomorphism (Enc(a) + Enc(b) = Enc(a + b))
 - **Batch Processing**: Combines all encrypted votes without decrypting individual votes
 - **No Discrete Logarithm**: BGV eliminates the need for discrete log solving, providing exact results
-- **Verification Proofs**: Generates Non-Interactive Zero-Knowledge proofs of correct tallying
-- **Quorum Enforcement**: Only performs tallying when minimum vote threshold is met
+E- **Quorum Enforcement**: Only performs tallying when minimum vote threshold is met
 
 #### **5. Threshold Decryption**
 ```python
