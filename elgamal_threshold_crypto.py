@@ -15,6 +15,7 @@ import secrets
 import hashlib
 from typing import List, Tuple, Dict, Any, Optional
 from dataclasses import dataclass
+from schnorr_zkp import SchnorrPartialDecryptionProof, verify_partial_decryption_zkp_from_json
 
 debug_on = False
 
@@ -289,34 +290,24 @@ class ThresholdElGamal:
         return (share_x, partial_dec_value)
     
     def _create_partial_decryption_proof(self, ciphertext: ElGamalCiphertext, 
-                                       participant_id: int, secret_share: int) -> Dict[str, str]:
+                                       participant_id: int, secret_share: tuple, partial_decryption_result: dict) -> Dict[str, Any]:
         """
         Create a zero-knowledge proof that partial decryption was computed correctly.
         
         This proves knowledge of the secret share without revealing it.
         Uses Schnorr-like proof adapted for ElGamal partial decryption.
         """
-        # Simplified ZKP for demonstration
-        # In practice, this would be a proper discrete log proof
+        proof_system = SchnorrPartialDecryptionProof()
+        import json
+        encrypted_tally_str = json.dumps(ciphertext.to_dict())
         
-        # Generate challenge using Fiat-Shamir heuristic
-        challenge_input = (
-            hex(ciphertext.c1).encode() +
-            hex(ciphertext.c2).encode() +
-            str(participant_id).encode()
+        proof = proof_system.create_proof(
+            secret_share=secret_share,
+            encrypted_tally=encrypted_tally_str,
+            partial_decryption_result=partial_decryption_result,
+            voter_id=participant_id
         )
-        challenge = hash_to_scalar(challenge_input)
-        
-        # Create proof components (simplified)
-        commitment = secrets.randbelow(Q)
-        response = (commitment + challenge * secret_share) % Q
-        
-        return {
-            'type': 'elgamal_partial_decryption_proof',
-            'challenge': hex(challenge),
-            'response': hex(response),
-            'participant_id': str(participant_id)
-        }
+        return proof
     
     def combine_shares_and_decrypt(self, ciphertext: ElGamalCiphertext, 
                                  partial_results: List[Tuple[int, int]]) -> int:
@@ -389,29 +380,15 @@ class ThresholdElGamal:
         Returns:
             True if the partial decryption is valid
         """
-        # Verify the zero-knowledge proof
-        proof = partial_dec.proof
-        
-        if proof['type'] != 'elgamal_partial_decryption_proof':
-            return False
-        
-        # In a real implementation, we'd verify the Schnorr-like proof
-        # For this demonstration, we'll do a simplified check
-        
-        try:
-            challenge = int(proof['challenge'], 16)
-            response = int(proof['response'], 16)
-            participant_id = int(proof['participant_id'])
-            
-            # Simplified verification - in practice, this would be cryptographically sound
-            if challenge > 0 and response > 0 and 1 <= participant_id <= self.num_participants:
-                debug(f"ThresholdElGamal: Verified partial decryption from participant {participant_id}")
-                return True
-        except (ValueError, KeyError):
-            pass
-        
-        debug(f"ThresholdElGamal: Failed to verify partial decryption")
-        return False
+        import json
+        encrypted_tally_str = json.dumps(ciphertext.to_dict())
+        partial_dec_result_dict = {
+            'share_index': partial_dec.share_index,
+            'partial_value': partial_dec.partial_decryption
+        }
+        zkp_json = json.dumps(partial_dec.proof)
+
+        return verify_partial_decryption_zkp_from_json(zkp_json, encrypted_tally_str, partial_dec_result_dict)
 
 
 def create_threshold_elgamal_system(threshold: int, num_participants: int) -> ThresholdElGamal:
