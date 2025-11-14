@@ -1,6 +1,10 @@
 """
 Schnorr-based  Zero-Knowledge Proof Implementation
 
+WARNING: This implementation is for demonstration purposes only and is not
+cryptographically secure. It lacks the necessary elliptic curve operations
+for a secure implementation. Do not use in a production environment.
+
 This module provides a cryptographically sound zero-knowledge proof system
 Supports two types of proofs:
 * Disjunctive Proofs for vote validity (0 or 1) for proving that a secret
@@ -63,7 +67,13 @@ class SchnorrProofBase:
         )
     
     def _scalar_mult(self, scalar: int, point: ec.EllipticCurvePublicKey) -> ec.EllipticCurvePublicKey:
-        """Multiply elliptic curve point by scalar (simulate scalar multiplication)."""
+        """
+        Multiply elliptic curve point by scalar (simulate scalar multiplication).
+        
+        WARNING: This is a mock implementation for demonstration purposes and is not
+        cryptographically secure. A real implementation would use proper EC scalar
+        multiplication.
+        """
         # In a real implementation, we'd use proper EC scalar multiplication
         # For this proof-of-concept, we'll use a hash-based approach for simplicity
         private_key = ec.derive_private_key(scalar % self.q, self.curve)

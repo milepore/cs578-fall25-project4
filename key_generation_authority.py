@@ -2,7 +2,7 @@ import hashlib
 import secrets
 from typing import List, Tuple
 from ed25519_utils import generate_auth_challenge, verify_signature 
-from bgv_threshold_crypto import create_shares, PRIME
+from elgamal_threshold_crypto import create_elgamal_secret_shares
 
 debug_on=False
 
@@ -68,22 +68,25 @@ class KeyGenerationAuthority:
         
         # Step 2: Generate master secret and create shares (CRITICAL SECURITY STEP)
         debug("KGA: Generating master secret and creating Shamir shares...")
-        self.master_secret = secrets.randbits(127) % PRIME
-        self.secret_shares = create_shares(
-            self.master_secret, 
+        # Generate a random master secret for ElGamal
+        import secrets
+        from elgamal_threshold_crypto import Q
+        self.master_secret = secrets.randbits(256) % Q
+        self.secret_shares = create_elgamal_secret_shares(
+            self.master_secret,
             threshold, 
             num_participants
         )
         debug(f"KGA: Created {len(self.secret_shares)} secret shares with threshold {threshold}")
         
-        # Step 3: Get public context for BGV encryption
-        public_context = self.decision_server.crypto_system.get_public_context()
+        # Step 3: Get public key for ElGamal encryption
+        public_context = self.decision_server.crypto_system.get_public_key()
         
         # Create a derived public key identifier for voters
-        public_key = f"bgv_threshold_pk_{hashlib.sha256(public_context).hexdigest()[:32]}"
-        debug(f"KGA: Generated BGV public context: {public_key[:20]}...")
+        public_key = f"elgamal_threshold_pk_{hashlib.sha256(public_context).hexdigest()[:32]}"
+        debug(f"KGA: Generated ElGamal public key: {public_key[:20]}...")
         
-        # Step 4: Distribute BGV secret shares and public context to authenticated voters
+        # Step 4: Distribute ElGamal secret shares and public key to authenticated voters
         debug("KGA: Distributing secret shares to voters...")
         for i, voter in enumerate(voters):
             secret_share = self.secret_shares[i] 
@@ -150,7 +153,7 @@ class KeyGenerationAuthority:
             self.master_secret = 0
             self.master_secret = None
             debug("KGA: Master secret securely deleted")
-        
+            
         if self.secret_shares is not None:
             # Overwrite all shares with zeros then clear the list
             for i in range(len(self.secret_shares)):

@@ -88,7 +88,7 @@ def test_voter_with_real_zkp():
         
         voter1._encrypt_vote = mock_encrypt_vote
         
-        result1 = voter1.castVote(0)
+        result1 = voter1.cast_vote(0)
         print(f"Vote 0 casting result: {'SUCCESS' if result1 else 'FAILURE'}")
         
         # Restore original method
@@ -109,7 +109,7 @@ def test_voter_with_real_zkp():
         
         voter2._encrypt_vote = mock_encrypt_vote2
         
-        result2 = voter2.castVote(1)
+        result2 = voter2.cast_vote(1)
         print(f"Vote 1 casting result: {'SUCCESS' if result2 else 'FAILURE'}")
         
         # Restore original method

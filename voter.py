@@ -5,8 +5,8 @@ import hashlib
 import secrets
 import json
 
-# Import our BGV threshold crypto implementation
-from bgv_threshold_crypto import BGVThresholdCrypto, BGVCiphertext
+# Import our ElGamal threshold crypto implementation
+from elgamal_threshold_crypto import ThresholdElGamal, ElGamalCiphertext
 
 # Import the Schnorr-based zero-knowledge proof system
 from schnorr_zkp import SchnorrDisjunctiveProof, verify_zkp_from_json, SchnorrPartialDecryptionProof
@@ -178,37 +178,30 @@ class Voter:
     
     def _encrypt_vote(self, vote: int, public_context: bytes) -> str:
         """
-        Encrypt a vote using BGV homomorphic encryption.
+        Encrypt a vote using ElGamal homomorphic encryption.
         
         Args:
             vote: The vote to encrypt (0 or 1)
-            public_context: The BGV public context for encryption
+            public_context: The ElGamal public key for encryption
             
         Returns:
-            str: The encrypted vote (BGV ciphertext serialized as JSON)
+            str: The encrypted vote (ElGamal ciphertext serialized as JSON)
         """
         import json
         
         try:
-            # Create a temporary BGV crypto instance with public context
-            import tenseal as ts
-            context = ts.context_from(public_context)
-            
-            # Encrypt the vote using BFV
-            encrypted_vote = ts.bfv_vector(context, [vote])
-            
-            # Create BGV ciphertext object
-            bgv_ciphertext = BGVCiphertext(
-                serialized_data=encrypted_vote.serialize(),
-                context_data={
-                    'scheme': 'BFV',
-                    'voter_id': self.voter_id,
-                    'encrypted_at': 'timestamp_placeholder'
-                }
+            # Create a temporary ElGamal crypto instance with public key
+            from elgamal_threshold_crypto import ThresholdElGamal
+            temp_crypto = ThresholdElGamal(
+                threshold=self.decision_server.quorum,
+                num_participants=self.decision_server.number_voters
             )
             
+            # Encrypt the vote using ElGamal
+            elgamal_ciphertext = temp_crypto.encrypt(vote)
+            
             # Serialize to JSON
-            encrypted_vote_json = json.dumps(bgv_ciphertext.to_dict())
+            encrypted_vote_json = json.dumps(elgamal_ciphertext.to_dict())
 
             debug(f"Voter {self.voter_id}: Encrypted vote using BGV/BFV")
 
@@ -310,13 +303,13 @@ class Voter:
         try:
             import json
             ciphertext_dict = json.loads(encrypted_tally)
-            from bgv_threshold_crypto import BGVCiphertext
-            bgv_ciphertext = BGVCiphertext.from_dict(ciphertext_dict)
+            from elgamal_threshold_crypto import ElGamalCiphertext
+            elgamal_ciphertext = ElGamalCiphertext.from_dict(ciphertext_dict)
         except (json.JSONDecodeError, Exception) as e:
             raise ValueError(f"Invalid encrypted tally format: {e}")
         
-        # Compute partial decryption using BGV threshold crypto
-        partial_decryption_result = self._compute_partial_decryption(bgv_ciphertext)
+        # Compute partial decryption using ElGamal threshold crypto
+        partial_decryption_result = self._compute_partial_decryption(elgamal_ciphertext)
         
         # Create proof of correct partial decryption
         decryption_proof = self._create_partial_decryption_proof(
@@ -361,11 +354,11 @@ class Voter:
         Returns:
             dict: Partial decryption result that can be safely shared
         """
-        from bgv_threshold_crypto import BGVThresholdCrypto
+        from elgamal_threshold_crypto import ThresholdElGamal
         
         # Create a temporary crypto system to perform partial decryption
         # Note: In a real implementation, this would be more sophisticated
-        temp_crypto = BGVThresholdCrypto(
+        temp_crypto = ThresholdElGamal(
             threshold=self.decision_server.quorum,
             num_participants=self.decision_server.number_voters
         )

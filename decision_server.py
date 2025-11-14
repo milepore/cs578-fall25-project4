@@ -3,8 +3,8 @@ from ed25519_utils import generate_auth_challenge, verify_signature
 
 import hashlib
 
-# Import our BGV-based threshold crypto system
-from bgv_threshold_crypto import BGVThresholdCrypto, BGVCiphertext
+# Import our ElGamal-based threshold crypto system
+from elgamal_threshold_crypto import ThresholdElGamal, ElGamalCiphertext
 from schnorr_zkp import verify_zkp_from_json, verify_partial_decryption_zkp_from_json
 
 
@@ -30,7 +30,7 @@ class DecisionServer:
         self.number_voters = number_voters
         self.quorum = quorum
         self.registered_voters = {}  # Dictionary to store voter_id -> public_key mappings
-        self.crypto_system = BGVThresholdCrypto(threshold=quorum, num_participants=number_voters)
+        self.crypto_system = ThresholdElGamal(threshold=quorum, num_participants=number_voters)
         self.bgv_public_key = None   # Will store the BGV public key
 
         # Validate inputs
@@ -95,7 +95,7 @@ class DecisionServer:
             return {
                 'all_encrypted_votes': list(self.votes.values()),
                 'encrypted_tally': self.get_encrypted_tally(),
-                'bgv_parameters': self.crypto_system.get_public_context(),
+                'elgamal_parameters': self.crypto_system.get_public_key(),
             }
 
     def cast_vote(self, encrypted_vote: str, zkp: str, voter_id: int, signature: str) -> bool:
@@ -245,8 +245,8 @@ class DecisionServer:
                 # Parse the BGV ciphertext from JSON format
                 import json
                 ciphertext_dict = json.loads(encrypted_vote)
-                bgv_ciphertext = BGVCiphertext.from_dict(ciphertext_dict)
-                ciphertexts.append(bgv_ciphertext)
+                elgamal_ciphertext = ElGamalCiphertext.from_dict(ciphertext_dict)
+                ciphertexts.append(elgamal_ciphertext)
                 debug(f"  Processing vote {i}: BGV ciphertext parsed")
                 
             except (ValueError, json.JSONDecodeError) as e:
@@ -271,7 +271,7 @@ class DecisionServer:
         serialized_result = json.dumps(total_ciphertext.to_dict())
         
         debug(f"DecisionServer: BGV homomorphic sum computed from {len(ciphertexts)} ciphertexts")
-        debug(f"DecisionServer: Result size: {len(total_ciphertext.serialized_data)} bytes")
+        debug(f"DecisionServer: Result size: {len(str(total_ciphertext.to_dict()))} bytes")
         
         return serialized_result
     
@@ -444,7 +444,7 @@ class DecisionServer:
         import json
         try:
             ciphertext_dict = json.loads(encrypted_tally)
-            total_ciphertext = BGVCiphertext.from_dict(ciphertext_dict)
+            total_ciphertext = ElGamalCiphertext.from_dict(ciphertext_dict)
         except json.JSONDecodeError:
             raise ValueError(f"Invalid BGV ciphertext format: {encrypted_tally[:100]}...")
         

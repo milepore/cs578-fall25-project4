@@ -51,6 +51,7 @@ def main():
     tests = [
         ("test_schnorr_zkp.py", "Comprehensive Schnorr ZKP Tests"),
         ("test_bgv_threshold.py", "BGV Threshold Cryptography Tests"),
+        ("test_elgamal_threshold.py", "ElGamal Threshold Cryptography Tests"),
         ("test_zkp.py", "Core ZKP Functionality Tests"),
         ("test_verification.py", "ZKP Verification Method Tests"),
         ("test_integration.py", "Full Voting Integration Tests")
