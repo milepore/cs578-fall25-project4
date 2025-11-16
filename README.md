@@ -161,7 +161,55 @@ This design provides a robust, privacy-preserving voting system suitable for gro
 - **`bgv_threshold_crypto.py`**: BGV/BFV homomorphic encryption with threshold decryption
 - **`schnorr_zkp.py`**: Schnorr Zero Knowledge Proofs for validation
 
-## Potential Improvements
+## Performance and Scalability
+
+### **Verified Scale**
+This system has been tested and validated with **50 voters** and a 35-voter quorum threshold. The simulation demonstrates stable performance at this scale with:
+- Efficient vote encryption and ZKP generation
+- Fast homomorphic tallying operations
+- Reliable threshold decryption with multiple partial shares
+
+### **Design Target**
+The system is designed for **small-to-midsize voting scenarios**, such as:
+- Committee decisions (5-100 participants)
+- Board votes and governance decisions
+- Small organizational elections
+- Academic department decisions
+- Working group consensus building
+
+### **Scalability Considerations**
+The **upper performance bounds are currently unknown**. Several factors may limit scalability at larger scales:
+
+#### **Potential Bottlenecks**
+1. **BGV Ciphertext Size**: Each encrypted vote is relatively large (~several KB), which could impact:
+   - Network bandwidth during vote submission
+   - Memory usage when storing all encrypted votes
+   - Homomorphic computation time scaling O(n) with voter count
+
+2. **Homomorphic Addition Cost**: While BGV is efficient, summing hundreds or thousands of ciphertexts could become computationally expensive
+
+3. **Zero-Knowledge Proof Verification**: Each vote requires ZKP verification, scaling linearly with voter count
+
+4. **Threshold Decryption Overhead**: Lagrange interpolation complexity increases with the number of shares being combined
+
+#### **Uncharted Territory**
+We have not tested:
+- **100+ voters**: Performance characteristics at larger scales
+- **High quorum ratios**: Impact of requiring large threshold values (e.g., 90 of 100 voters)
+- **Concurrent voting**: Behavior under high-throughput vote submission
+- **Memory bounds**: Maximum voter count before memory constraints
+
+### **Optimization Opportunities**
+For larger-scale deployments, future work could explore:
+- Batch ZKP verification techniques
+- Optimized BGV parameter selection for voting-specific operations
+- Distributed tallying across multiple servers
+- Ciphertext compression strategies
+- Incremental homomorphic tallying
+
+**Recommendation**: For elections with 100+ participants, conduct performance testing and consider architectural modifications or alternative cryptographic schemes better suited to large-scale deployments.
+
+## Future Work
 
 ### Use of Distributed Key Generation Scheme
 
@@ -175,3 +223,91 @@ We used Shamir's secret sharing algorithm.  We could have instead used a verifia
 Another potential improvement might be to have the entire cryptographic vote registry be signed as each new vote is added - and then sent to the voter.
 
 This would ensure that prior votes could not be dropped without invalidating the signatures in the register as we go through the algorithm.
+
+### Performance Testing and Benchmarking
+Comprehensive performance analysis to determine:
+- Maximum practical voter count for the current implementation
+- Computational bottlenecks in the tallying and decryption phases
+- Memory usage patterns at scale
+- Network bandwidth requirements for large elections
+
+## Design Alternatives
+
+### ElGamal vs BGV Threshold Encryption
+
+While this implementation uses **BGV/BFV homomorphic encryption** with TenSEAL, an alternative approach would be to use **ElGamal threshold encryption**. Both schemes support threshold decryption, but differ in their properties:
+
+#### **BGV Approach (Current Implementation)**
+- **Advantages**:
+  - Fully homomorphic encryption with exact integer arithmetic
+  - No discrete logarithm problem to solve for decryption
+  - Supports complex polynomial operations beyond addition
+  - Native threshold support via secret sharing of the secret key
+  
+- **Trade-offs**:
+  - More complex mathematical operations
+  - Larger ciphertext sizes
+  - Requires careful parameter selection for security
+
+#### **ElGamal Threshold Approach (Alternative)**
+- **Advantages**:
+  - Simpler mathematical structure (discrete logarithm based)
+  - Well-studied security properties
+  - Efficient implementations available
+  - Natural threshold decryption using distributed key generation
+  
+- **Trade-offs**:
+  - Requires solving discrete logarithm for final decryption (limiting vote counts)
+  - Only supports multiplicative homomorphism (addition requires exponential representation)
+  - Potential scalability issues with large vote counts
+
+#### **Implementation Note**
+We explored an ElGamal-based implementation in a separate branch (`elgamal-threshold`). For a reference implementation of full threshold decryption using ElGamal, see: **[threshold-crypto by tompetersen](https://github.com/tompetersen/threshold-crypto)**. This library demonstrates distributed key generation and threshold decryption with ElGamal, providing a complete working example of the alternative approach.
+
+The choice between BGV and ElGamal depends on the specific requirements of the voting system:
+- **Small-scale elections** with limited vote counts may benefit from ElGamal's simplicity
+- **Large-scale elections** or systems requiring exact counts are better served by BGV's capabilities
+
+## Implementation Notes: Threshold Decryption Simulation
+
+### Mathematical Complexity Considerations
+
+This implementation **simulates threshold decryption** rather than implementing the full mathematical protocol for BGV threshold decryption. This design decision was made due to the significant mathematical complexity involved in proper threshold decryption for BGV/BFV schemes.
+
+#### **What We Simulated**
+- **Shamir Secret Sharing**: We split a master secret into `n` shares and distribute them to voters
+- **Partial Decryptions**: Each voter generates a "partial decryption" using their share
+- **Share Reconstruction**: We combine partial decryptions using Lagrange interpolation
+
+#### **Why Full Threshold BGV is Complex**
+Full threshold decryption for BGV requires:
+1. **Distributed Key Generation**: Creating a shared public key without any party knowing the full secret key
+2. **Polynomial Secret Sharing in Rings**: Shamir's scheme over polynomial rings modulo specific BGV parameters
+3. **Noise Management**: Careful handling of BGV noise budgets during partial decryption
+4. **Relinearization Keys**: Proper distribution of evaluation keys for threshold operations
+5. **Proof Systems**: ZKP proofs that partial decryptions are correctly formed
+
+Implementing these correctly requires deep expertise in:
+- Ring Learning With Errors (RLWE) mathematics
+- Polynomial ring arithmetic over cyclotomic fields
+- BGV/BFV parameter selection for threshold security
+- Noise analysis across multiple partial decryptions
+
+#### **Our Pragmatic Approach**
+Rather than risk incorrect implementation of these complex mathematical operations, we:
+1. Use a **trusted Key Generation Authority** that creates the BGV keypair
+2. Split the secret key using **standard Shamir Secret Sharing** over a prime field
+3. Distribute shares to authenticated voters
+4. Simulate partial decryptions using share-based reconstruction
+
+This approach maintains the **security properties** we need (threshold access, vote privacy) while avoiding the mathematical pitfalls of full distributed BGV decryption.
+
+#### **Production Considerations**
+For a production system, we recommend:
+- Using a battle-tested library like **[threshold-crypto](https://github.com/tompetersen/threshold-crypto)** (ElGamal-based)
+- Engaging cryptographic experts to implement or audit full BGV threshold protocols
+- Considering hybrid approaches where ElGamal handles the threshold aspect and BGV handles computation
+- Extensive security audits and formal verification of any threshold cryptographic implementation
+
+The simulation approach used here is appropriate for educational purposes and proof-of-concept demonstrations, but production systems should use fully verified threshold cryptographic implementations.
+

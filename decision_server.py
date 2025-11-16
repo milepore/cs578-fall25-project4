@@ -2,6 +2,7 @@ from typing import List
 from ed25519_utils import generate_auth_challenge, verify_signature 
 
 import hashlib
+import secrets
 
 # Import our BGV-based threshold crypto system
 from bgv_threshold_crypto import BGVThresholdCrypto, BGVCiphertext
@@ -32,6 +33,10 @@ class DecisionServer:
         self.registered_voters = {}  # Dictionary to store voter_id -> public_key mappings
         self.crypto_system = BGVThresholdCrypto(threshold=quorum, num_participants=number_voters)
         self.bgv_public_key = None   # Will store the BGV public key
+        
+        # Generate a cryptographically secure unique election ID (nonce)
+        # Using 32 bytes (256 bits) for strong uniqueness guarantee
+        self.election_id = secrets.token_hex(32)
 
         # Validate inputs
         if not isinstance(number_voters, int) or number_voters <= 0:
@@ -65,6 +70,18 @@ class DecisionServer:
         
         self.registered_voters[voter_identity] = public_key
         return True
+    
+    def get_election_id(self):
+        """
+        Get the unique election ID for this decision server.
+        
+        This ID is a cryptographically secure random nonce generated at server
+        creation time and uniquely identifies this election instance.
+        
+        Returns:
+            str: The election ID as a hexadecimal string (64 characters, 256 bits)
+        """
+        return self.election_id
     
     def is_voter_registered(self, voter_identity):
         """
@@ -119,7 +136,8 @@ class DecisionServer:
             return False
         
         # Step 2: Verify signature
-        vote_message = f"{encrypted_vote}|{zkp}|{voter_id}"
+        vote_message = f"{encrypted_vote}|{zkp}|{self.election_id}|{voter_id}"
+
         if not self._verify_vote_signature(vote_message, signature, voter_id):
             debug(f"DecisionServer: Vote rejected - invalid signature from voter {voter_id}")
             return False

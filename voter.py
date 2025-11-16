@@ -153,7 +153,8 @@ class Voter:
         debug(f"Voter {self.voter_id} created ZKP: {zkp[:30]}...")
         
         # Step 3: Create message to sign (vote data + voter identity)
-        vote_message = f"{encrypted_vote}|{zkp}|{self.voter_id}"
+        election_id = self.decision_server.get_election_id()
+        vote_message = f"{encrypted_vote}|{zkp}|{election_id}|{self.voter_id}"
         vote_signature = self._sign_vote_message(vote_message)
         
         # Step 4: Send to DecisionServer
